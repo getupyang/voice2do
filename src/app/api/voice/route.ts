@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { transcribeAndClean } from "@/lib/gemini";
+import { transcribeWithIflytek } from "@/lib/iflytek";
+import { extractPcm } from "@/lib/audio";
 import { supabase } from "@/lib/supabase";
 
 export async function POST(request: NextRequest) {
@@ -115,15 +116,19 @@ export async function POST(request: NextRequest) {
     memoId = memoData.id;
     console.log("Created memo with id:", memoId);
 
-    // Step 4: 调用 Gemini 转写
+    // Step 4: 转换音频为 PCM 并调用讯飞转写
     let rawText: string;
     let cleanedText: string;
 
     try {
-      const result = await transcribeAndClean(audioBuffer, mimeType);
-      rawText = result.rawText;
-      cleanedText = result.cleanedText;
-      console.log("Transcription successful:", cleanedText.substring(0, 50));
+      console.log("Extracting PCM from audio...");
+      const pcmBuffer = extractPcm(audioBuffer);
+      console.log("PCM buffer size:", pcmBuffer.length, "bytes");
+
+      console.log("Calling iFlytek transcription...");
+      rawText = await transcribeWithIflytek(pcmBuffer);
+      cleanedText = rawText;
+      console.log("Transcription result:", rawText.substring(0, 50));
     } catch (transcribeError) {
       // 转写失败，更新记录状态为 error
       console.error("Transcription failed:", transcribeError);
