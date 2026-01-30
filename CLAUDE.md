@@ -15,7 +15,8 @@ Voice2Do 是一个语音备忘录应用：
 - **语言**: TypeScript
 - **样式**: Tailwind CSS
 - **数据库**: Supabase (PostgreSQL)
-- **语音转文字**: Google Gemini API
+- **语音转文字**: 讯飞中英识别大模型 API
+- **文本清理**: Google Gemini API
 - **部署**: Vercel
 
 ## 项目结构
@@ -52,6 +53,9 @@ voice2do/
 NEXT_PUBLIC_SUPABASE_URL=xxx
 NEXT_PUBLIC_SUPABASE_ANON_KEY=xxx
 GEMINI_API_KEY=xxx
+IFLYTEK_APPID=xxx
+IFLYTEK_API_KEY=xxx
+IFLYTEK_API_SECRET=xxx
 ```
 
 ## 数据库表
