@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cleanText } from "@/lib/gemini";
 import { transcribeWithIflytek } from "@/lib/iflytek";
-import { convertToPcm } from "@/lib/audio";
+import { extractPcmFromWav } from "@/lib/audio";
 import { supabase } from "@/lib/supabase";
 
 export async function POST(request: NextRequest) {
@@ -122,8 +122,8 @@ export async function POST(request: NextRequest) {
     let cleanedText: string;
 
     try {
-      console.log("Converting audio to PCM...");
-      const pcmBuffer = await convertToPcm(audioBuffer, mimeType);
+      console.log("Extracting PCM from WAV...");
+      const pcmBuffer = extractPcmFromWav(audioBuffer);
       console.log("PCM buffer size:", pcmBuffer.length, "bytes");
 
       console.log("Calling iFlytek transcription...");
