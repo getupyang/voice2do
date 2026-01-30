@@ -10,9 +10,17 @@ export async function POST(request: NextRequest) {
     let mimeType: string;
 
     if (contentType.includes("multipart/form-data")) {
-      // 处理 form-data 格式
+      // 处理 form-data 格式（iOS 捷径）
       const formData = await request.formData();
-      const file = formData.get("audio") as File | null;
+
+      // 尝试多种可能的字段名
+      let file: File | null = null;
+      for (const [key, value] of formData.entries()) {
+        if (value instanceof File) {
+          file = value;
+          break;
+        }
+      }
 
       if (!file) {
         return NextResponse.json(
