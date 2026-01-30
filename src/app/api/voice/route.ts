@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cleanText } from "@/lib/gemini";
 import { transcribeWithIflytek } from "@/lib/iflytek";
 import { extractPcm } from "@/lib/audio";
 import { supabase } from "@/lib/supabase";
@@ -128,16 +127,8 @@ export async function POST(request: NextRequest) {
 
       console.log("Calling iFlytek transcription...");
       rawText = await transcribeWithIflytek(pcmBuffer);
+      cleanedText = rawText;
       console.log("Transcription result:", rawText.substring(0, 50));
-
-      // 使用 Gemini 清理语气词（失败时用原文）
-      try {
-        cleanedText = await cleanText(rawText);
-        console.log("Cleaned text:", cleanedText.substring(0, 50));
-      } catch (cleanError) {
-        console.warn("Gemini clean failed, using raw text:", cleanError);
-        cleanedText = rawText;
-      }
     } catch (transcribeError) {
       // 转写失败，更新记录状态为 error
       console.error("Transcription failed:", transcribeError);
