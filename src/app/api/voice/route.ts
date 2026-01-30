@@ -15,6 +15,10 @@ export async function POST(request: NextRequest) {
 
     console.log("Received request with content-type:", contentType);
 
+    // 读取设备名称（从请求头）
+    const deviceName = request.headers.get("device_name") || request.headers.get("device-name") || null;
+    console.log("Device name:", deviceName);
+
     if (contentType.includes("multipart/form-data")) {
       // 处理 form-data 格式（iOS 捷径）
       const formData = await request.formData();
@@ -101,6 +105,7 @@ export async function POST(request: NextRequest) {
         cleaned_text: "[转写中...]",
         intent: "memo",
         status: "pending",
+        device_id: deviceName,
       })
       .select()
       .single();

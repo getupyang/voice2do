@@ -89,7 +89,10 @@ function MemoCard({ memo }: { memo: Memo }) {
     <article className="memo-card">
       <p className="text-lg leading-relaxed">{memo.cleaned_text}</p>
       <div className="mt-4 flex items-center justify-between text-sm text-[var(--muted)]">
-        <time>{formatTime(memo.created_at)}</time>
+        <span>
+          {formatTime(memo.created_at)}
+          {memo.device_id && <span> · {memo.device_id}</span>}
+        </span>
         {memo.intent !== "memo" && (
           <span className="px-2 py-0.5 rounded-full bg-[var(--accent-light)] text-xs">
             {memo.intent}
