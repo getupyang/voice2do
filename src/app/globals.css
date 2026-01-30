@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+:root {
+  /* 温暖色调 */
+  --background: #FFFBF5;
+  --foreground: #2D2D2D;
+  --muted: #8B8B8B;
+  --card: #FFFFFF;
+  --card-border: #F0EBE3;
+  --accent: #D4A574;
+  --accent-light: #F5E6D3;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-card: var(--card);
+  --color-card-border: var(--card-border);
+  --color-accent: var(--accent);
+  --color-accent-light: var(--accent-light);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  /* 使用系统字体栈，优先使用中文衬线字体 */
+  font-family:
+    "Songti SC",           /* macOS 宋体 */
+    "Noto Serif CJK SC",   /* Linux/Android */
+    "Source Han Serif SC",
+    "STSong",              /* Windows 宋体 */
+    "SimSun",
+    Georgia,
+    "Times New Roman",
+    serif;
+  line-height: 1.8;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 时间轴样式 */
+.timeline-group-label {
+  font-size: 0.875rem;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+}
+
+/* 卡片样式 */
+.memo-card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  transition: box-shadow 0.2s ease;
+}
+
+.memo-card:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+/* 分类标签样式 */
+.category-tab {
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+  border: 1px solid var(--card-border);
+  background: var(--card);
+  color: var(--muted);
+}
+
+.category-tab:hover {
+  border-color: var(--accent);
+  color: var(--foreground);
+}
+
+.category-tab.active {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--foreground);
+}
