@@ -130,9 +130,14 @@ export async function POST(request: NextRequest) {
       rawText = await transcribeWithIflytek(pcmBuffer);
       console.log("Transcription result:", rawText.substring(0, 50));
 
-      // 使用 Gemini 清理语气词
-      cleanedText = await cleanText(rawText);
-      console.log("Cleaned text:", cleanedText.substring(0, 50));
+      // 使用 Gemini 清理语气词（失败时用原文）
+      try {
+        cleanedText = await cleanText(rawText);
+        console.log("Cleaned text:", cleanedText.substring(0, 50));
+      } catch (cleanError) {
+        console.warn("Gemini clean failed, using raw text:", cleanError);
+        cleanedText = rawText;
+      }
     } catch (transcribeError) {
       // 转写失败，更新记录状态为 error
       console.error("Transcription failed:", transcribeError);
