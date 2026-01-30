@@ -12,7 +12,7 @@ export async function transcribeAndClean(
   audioBuffer: Buffer,
   mimeType: string
 ): Promise<{ rawText: string; cleanedText: string }> {
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
   // 将音频转为 base64
   const audioBase64 = audioBuffer.toString("base64");
