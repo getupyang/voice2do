@@ -15,21 +15,18 @@ export async function POST(request: NextRequest) {
 
     console.log("Received request with content-type:", contentType);
 
-    // 读取设备名称（从请求头，支持 URL 编码的中文）
-    const rawDeviceName = request.headers.get("device_name") || request.headers.get("device-name") || null;
+    // 设备名称，优先从表单读取（支持中文），其次从请求头读取
     let deviceName: string | null = null;
-    if (rawDeviceName) {
-      try {
-        deviceName = decodeURIComponent(rawDeviceName);
-      } catch {
-        deviceName = rawDeviceName; // 解码失败则用原值
-      }
-    }
-    console.log("Device name:", deviceName);
 
     if (contentType.includes("multipart/form-data")) {
       // 处理 form-data 格式（iOS 捷径）
       const formData = await request.formData();
+
+      // 从表单读取设备名称
+      const formDeviceName = formData.get("device_name");
+      if (formDeviceName && typeof formDeviceName === "string") {
+        deviceName = formDeviceName;
+      }
 
       // 记录所有字段用于调试
       const fields: string[] = [];
@@ -73,9 +70,20 @@ export async function POST(request: NextRequest) {
         mimeType = "audio/m4a";
       }
       fileName = `audio_${Date.now()}.m4a`;
+
+      // 非表单请求时，从请求头读取设备名称（支持 URL 编码）
+      const rawDeviceName = request.headers.get("device_name") || request.headers.get("device-name") || null;
+      if (rawDeviceName) {
+        try {
+          deviceName = decodeURIComponent(rawDeviceName);
+        } catch {
+          deviceName = rawDeviceName;
+        }
+      }
     }
 
     console.log("Audio buffer size:", audioBuffer.length, "bytes");
+    console.log("Device name:", deviceName);
 
     if (audioBuffer.length === 0) {
       return NextResponse.json(
