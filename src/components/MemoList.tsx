@@ -7,9 +7,8 @@ import { TimelineGroup } from "@/types";
 
 const FILTER_OPTIONS: { value: "all" | IntentType; label: string }[] = [
   { value: "all", label: "全部" },
-  { value: "movie", label: "想看" },
-  { value: "place", label: "想去" },
-  { value: "todo", label: "想做" },
+  { value: "movie", label: "电影" },
+  { value: "place", label: "目的地" },
 ];
 
 export default function MemoList({ memos }: { memos: Memo[] }) {

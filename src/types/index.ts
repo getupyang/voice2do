@@ -1,11 +1,10 @@
 // 意图类型
-export type IntentType = 'memo' | 'movie' | 'place' | 'todo';
+export type IntentType = 'memo' | 'movie' | 'place';
 
-// 意图标签映射
+// 意图标签映射（仅 movie 和 place 在前端显示 tag）
 export const INTENT_LABELS: Record<IntentType, string> = {
-  movie: '想看',
-  place: '想去',
-  todo: '想做',
+  movie: '电影',
+  place: '目的地',
   memo: '记录',
 };
 
@@ -20,11 +19,7 @@ export interface PlaceIntentData {
   reason?: string;
 }
 
-export interface TodoIntentData {
-  task: string;
-}
-
-export type IntentData = MovieIntentData | PlaceIntentData | TodoIntentData | null;
+export type IntentData = MovieIntentData | PlaceIntentData | null;
 
 // 备忘记录类型
 export interface Memo {

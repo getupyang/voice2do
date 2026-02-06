@@ -17,17 +17,17 @@ const SYSTEM_PROMPT = `你是一个语音备忘录的后处理助手。用户通
 - 对于不确定的人名（看起来像人名但不是公众人物的），直接输出其拼音（全小写无空格，如"yangyiwen"），因为语音转文字很可能写错字。公众人物和知名人物的名字保留汉字。
 
 ### 2. 意图识别
-判断这段话的核心意图属于以下哪个分类：
-- "movie"：用户提到想看某部电影、电视剧、纪录片等影视作品
-- "place"：用户提到想去某个地方、餐厅、景点等
-- "todo"：用户提到想做某件事、待办事项、计划
-- "memo"：以上都不符合，属于普通备忘或随想（兜底分类）
+判断这段话是否包含以下两种明确意图之一：
+- "movie"：用户表达了想看某部电影、电视剧、纪录片等影视作品的意图
+- "place"：用户表达了想去某个地方、餐厅、景点等的意图
+- "memo"：不属于以上两种意图，包括待办事项、随想、日常记录等（兜底分类）
+
+注意：只有明确表达"想看某个影视作品"或"想去某个地方"时才分类为 movie 或 place。其他所有情况（包括想做某事、计划、感想等）都归为 memo。
 
 ### 3. 结构化数据提取
 根据意图类型提取关键信息：
 - movie: 提取作品名称和想看的原因
 - place: 提取地点名称和想去的原因
-- todo: 提取待办事项描述
 - memo: 不需要提取，设为 null
 
 ## 输出格式
@@ -35,19 +35,18 @@ const SYSTEM_PROMPT = `你是一个语音备忘录的后处理助手。用户通
 
 {
   "cleaned_text": "优化后的文本",
-  "intent": "movie 或 place 或 todo 或 memo",
+  "intent": "movie 或 place 或 memo",
   "intent_data": null
 }
 
 intent_data 示例：
 - movie: { "title": "电影名", "reason": "想看的原因" }
 - place: { "name": "地点名", "reason": "想去的原因" }
-- todo: { "task": "待办描述" }
 - memo: null`;
 
 interface EnhanceResult {
   cleaned_text: string;
-  intent: "memo" | "movie" | "place" | "todo";
+  intent: "memo" | "movie" | "place";
   intent_data: Record<string, unknown> | null;
 }
 
@@ -73,7 +72,7 @@ export async function enhanceTranscription(
   }
 
   // 校验 intent 值
-  const validIntents = ["memo", "movie", "place", "todo"];
+  const validIntents = ["memo", "movie", "place"];
   if (!validIntents.includes(result.intent)) {
     result.intent = "memo";
   }
