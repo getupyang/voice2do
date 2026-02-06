@@ -15,8 +15,16 @@ export async function POST(request: NextRequest) {
 
     console.log("Received request with content-type:", contentType);
 
-    // 读取设备名称（从请求头）
-    const deviceName = request.headers.get("device_name") || request.headers.get("device-name") || null;
+    // 读取设备名称（从请求头，支持 URL 编码的中文）
+    const rawDeviceName = request.headers.get("device_name") || request.headers.get("device-name") || null;
+    let deviceName: string | null = null;
+    if (rawDeviceName) {
+      try {
+        deviceName = decodeURIComponent(rawDeviceName);
+      } catch {
+        deviceName = rawDeviceName; // 解码失败则用原值
+      }
+    }
     console.log("Device name:", deviceName);
 
     if (contentType.includes("multipart/form-data")) {
