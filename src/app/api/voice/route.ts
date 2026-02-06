@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { transcribeWithIflytek } from "@/lib/iflytek";
 import { extractPcm } from "@/lib/audio";
 import { supabase } from "@/lib/supabase";
+import { enhanceMemo } from "@/lib/enhance";
 
 export async function POST(request: NextRequest) {
   let memoId: string | null = null;
@@ -193,6 +195,13 @@ export async function POST(request: NextRequest) {
         { success: false, error: "数据库更新失败" },
         { status: 500 }
       );
+    }
+
+    // 异步调用 LLM 增强（不阻塞响应）
+    if (process.env.OPENROUTER_API_KEY) {
+      after(async () => {
+        await enhanceMemo(memoId!, rawText);
+      });
     }
 
     return NextResponse.json({
