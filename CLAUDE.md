@@ -2,11 +2,24 @@
 
 > 本文件为 AI 编程助手提供项目上下文，确保代码风格和架构的一致性。
 
+## 与 Claude 的协作规则
+
+**核心原则：信息先对齐，方案先确认，再动手**
+
+当用户提出一个方案时，如果 Claude 知道该方案存在技术限制、潜在风险、或有更优选择，应该：
+
+1. **先暂停**，不要直接动手写代码
+2. **告知用户相关的技术信息**（比如"HTTP 头部不支持中文"）
+3. **列出可选方案的优劣**
+4. **等用户决策后再开始写代码**
+
+避免：在用户信息不完整时，直接按用户的方案执行，导致返工。
+
 ## 项目概述
 
 Voice2Do 是一个语音备忘录应用：
 - 用户通过 iOS 捷径录制语音，上传到后端
-- 后端用 Gemini API 转写语音为文字，去除语气词
+- 后端用讯飞 API 转写语音为文字
 - 前端以时间轴方式展示所有备忘
 
 ## 技术栈
@@ -15,8 +28,7 @@ Voice2Do 是一个语音备忘录应用：
 - **语言**: TypeScript
 - **样式**: Tailwind CSS
 - **数据库**: Supabase (PostgreSQL)
-- **语音转文字**: 讯飞中英识别大模型 API
-- **文本清理**: Google Gemini API
+- **语音转文字**: 讯飞中英识别大模型 API（WebSocket）
 - **部署**: Vercel
 
 ## 项目结构
@@ -38,7 +50,8 @@ voice2do/
 │   ├── components/          # React组件
 │   ├── lib/                 # 工具函数
 │   │   ├── supabase.ts      # Supabase 客户端
-│   │   ├── gemini.ts        # Gemini API 封装
+│   │   ├── iflytek.ts       # 讯飞语音转写 API
+│   │   ├── audio.ts         # 音频格式处理（WAV/AIFF → PCM）
 │   │   └── utils.ts         # 通用工具
 │   └── types/               # TypeScript类型定义
 ├── public/                  # 静态资源
@@ -52,7 +65,6 @@ voice2do/
 ```
 NEXT_PUBLIC_SUPABASE_URL=xxx
 NEXT_PUBLIC_SUPABASE_ANON_KEY=xxx
-GEMINI_API_KEY=xxx
 IFLYTEK_APPID=xxx
 IFLYTEK_API_KEY=xxx
 IFLYTEK_API_SECRET=xxx
