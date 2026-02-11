@@ -9,6 +9,7 @@ const FILTER_OPTIONS: { value: "all" | IntentType; label: string }[] = [
   { value: "all", label: "全部" },
   { value: "movie", label: "电影" },
   { value: "place", label: "目的地" },
+  { value: "todo", label: "要做的事" },
 ];
 
 export default function MemoList({ memos }: { memos: Memo[] }) {
