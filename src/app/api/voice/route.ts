@@ -129,6 +129,16 @@ export async function POST(request: NextRequest) {
       rawText = await transcribeWithIflytek(pcmBuffer);
       cleanedText = rawText;
       console.log("Transcription result:", rawText.substring(0, 50));
+
+      // 防护：转写结果为空时，标记为错误并丢弃记录
+      if (!rawText.trim()) {
+        console.warn("Transcription returned empty result, discarding memo:", memoId);
+        await supabase.from("memos").delete().eq("id", memoId);
+        return NextResponse.json(
+          { success: false, error: "语音转写结果为空，可能是静音或无效音频" },
+          { status: 400 }
+        );
+      }
     } catch (transcribeError) {
       // 转写失败，更新记录状态为 error
       console.error("Transcription failed:", transcribeError);
