@@ -19,17 +19,20 @@ export async function PATCH(
     let imageUrl: string | null = null;
     if (image && image.size > 0) {
       try {
-        const bytes = await image.arrayBuffer();
-        const buffer = Buffer.from(bytes);
-        const ext = image.name.split('.').pop() || 'jpg';
+        // Derive safe extension; fall back to jpg
+        const rawExt = image.name.includes('.')
+          ? image.name.split('.').pop()!.toLowerCase().replace(/[^a-z0-9]/g, '')
+          : '';
+        const ext = rawExt || (image.type.split('/')[1]?.replace('jpeg', 'jpg')) || 'jpg';
         const filename = `completions/${id}-${Date.now()}.${ext}`;
 
+        // Pass the Blob/File directly — avoids Buffer dependency
         const { error: uploadError } = await supabase.storage
           .from('voice-memos')
-          .upload(filename, buffer, { contentType: image.type, upsert: true });
+          .upload(filename, image, { contentType: image.type, upsert: true });
 
         if (uploadError) {
-          console.error('Image upload error:', uploadError);
+          console.error('Image upload error:', JSON.stringify(uploadError));
         } else {
           const { data: urlData } = supabase.storage
             .from('voice-memos')
@@ -37,7 +40,7 @@ export async function PATCH(
           imageUrl = urlData.publicUrl;
         }
       } catch (uploadErr) {
-        // Non-fatal: proceed without image
+        // Non-fatal: mark as done without image
         console.error('Image upload exception:', uploadErr);
       }
     }

@@ -32,7 +32,7 @@ export default async function Home() {
   return (
     <div className="min-h-screen">
       {/* 页头 */}
-      <header className="sticky top-0 z-10 bg-[var(--background)] border-b border-[var(--card-border)] px-6 py-4">
+      <header className="sticky top-0 z-30 bg-[var(--background)] border-b border-[var(--card-border)] px-6 py-4">
         <h1 className="text-xl font-semibold text-center">Voice2Do</h1>
         <p className="text-sm text-[var(--muted)] text-center mt-1">
           用声音记录每一个灵感

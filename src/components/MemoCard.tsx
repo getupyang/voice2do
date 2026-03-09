@@ -12,6 +12,7 @@ export function MemoCard({ memo: initialMemo }: { memo: Memo }) {
   const [completionImage, setCompletionImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -33,6 +34,7 @@ export function MemoCard({ memo: initialMemo }: { memo: Memo }) {
 
   const handleComplete = async () => {
     setIsSubmitting(true);
+    setSubmitError(null);
     try {
       const formData = new FormData();
       if (completionNote.trim()) {
@@ -46,14 +48,17 @@ export function MemoCard({ memo: initialMemo }: { memo: Memo }) {
         method: 'PATCH',
         body: formData,
       });
-      if (!res.ok) throw new Error('Failed to complete memo');
+      if (!res.ok) throw new Error('保存失败，请重试');
 
       const json = await res.json();
       setMemo(json.data);
+      // 有图片但 URL 为空说明上传失败（DB 更新仍成功）
+      if (completionImage && !json.data.completion_image_url) {
+        setSubmitError('图片上传失败，已保存文字记录');
+      }
       setIsCompleting(false);
-      // Stay on back face showing the completion record; user taps blank to return
-    } catch {
-      // Keep form visible on error so user can retry
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : '保存失败，请重试');
     } finally {
       setIsSubmitting(false);
     }
@@ -100,6 +105,7 @@ export function MemoCard({ memo: initialMemo }: { memo: Memo }) {
                 completionNote={completionNote}
                 imagePreview={imagePreview}
                 isSubmitting={isSubmitting}
+                submitError={submitError}
                 fileInputRef={fileInputRef}
                 onNoteChange={setCompletionNote}
                 onImageChange={handleImageChange}
@@ -139,6 +145,7 @@ function BackForm({
   completionNote,
   imagePreview,
   isSubmitting,
+  submitError,
   fileInputRef,
   onNoteChange,
   onImageChange,
@@ -149,6 +156,7 @@ function BackForm({
   completionNote: string;
   imagePreview: string | null;
   isSubmitting: boolean;
+  submitError: string | null;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   onNoteChange: (v: string) => void;
   onImageChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -195,7 +203,11 @@ function BackForm({
         )}
       </div>
 
-      <div className="mt-4 flex gap-3">
+      {submitError && (
+        <p className="mt-2 text-xs text-red-500">{submitError}</p>
+      )}
+
+      <div className="mt-3 flex gap-3">
         <button onClick={onCancel} className="form-cancel-button">取消</button>
         <button onClick={onSubmit} disabled={isSubmitting} className="form-submit-button">
           {isSubmitting ? '保存中…' : '✓ 完成'}

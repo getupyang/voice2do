@@ -66,6 +66,8 @@ body {
 /* ===================== 卡片翻转动效 ===================== */
 .flip-container {
   perspective: 1200px;
+  position: relative;
+  z-index: 0;         /* 将 3D 翻转上下文锁定在比 header(z-30) 更低的层 */
 }
 
 .flip-inner {
