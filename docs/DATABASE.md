@@ -11,6 +11,7 @@
 |------|------|--------|------|
 | 2025-01-30 | 建表 | 用户 | 执行了 memos 表的创建 SQL，包含索引 |
 | 2025-01-30 | 测试数据 | 用户 | 插入了一条测试记录 |
+| 2026-03-09 | 加字段 | Claude | 添加完成记录专用字段（见迁移文件） |
 
 ## 表结构
 
@@ -34,12 +35,19 @@ create table memos (
   -- 扩展字段（预留）
   user_id uuid,                     -- 用户ID（未来多用户）
   device_id text,                   -- 设备标识
-  status text default 'active'      -- 状态: active/done/archived
+  status text default 'active',     -- 状态: active/done/archived
+
+  -- 完成记录字段（执行 supabase/migrations/20260309_add_completion_fields.sql 添加）
+  completed_at timestamptz,         -- 标记完成的时间
+  completion_note text,             -- 完成时的文字备注（可选）
+  completion_image_url text         -- 完成时上传的图片 URL（可选）
 );
 
 -- 索引
 create index memos_created_at_idx on memos(created_at desc);
 create index memos_intent_idx on memos(intent);
+create index memos_status_idx on memos(status);
+create index memos_completed_at_idx on memos(completed_at desc);
 ```
 
 ## 字段说明
@@ -55,6 +63,9 @@ create index memos_intent_idx on memos(intent);
 | user_id | uuid | 否 | null | 用户ID（预留） |
 | device_id | text | 否 | null | 设备标识（预留） |
 | status | text | 否 | 'active' | 记录状态 |
+| completed_at | timestamptz | 否 | null | 标记完成时间 |
+| completion_note | text | 否 | null | 完成时的文字备注 |
+| completion_image_url | text | 否 | null | 完成时上传的图片 URL |
 
 ## intent 类型
 

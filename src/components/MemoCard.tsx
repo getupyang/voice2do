@@ -4,21 +4,6 @@ import { useRef, useState } from 'react';
 import { Memo } from '@/types';
 import { formatTime } from '@/lib/utils';
 
-interface CompletionData {
-  completion_note?: string;
-  completion_image_url?: string;
-  completed_at?: string;
-}
-
-function getCompletionData(memo: Memo): CompletionData {
-  const d = memo.intent_data as CompletionData | null;
-  return {
-    completion_note: d?.completion_note,
-    completion_image_url: d?.completion_image_url,
-    completed_at: d?.completed_at,
-  };
-}
-
 export function MemoCard({ memo: initialMemo }: { memo: Memo }) {
   const [memo, setMemo] = useState(initialMemo);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -30,13 +15,12 @@ export function MemoCard({ memo: initialMemo }: { memo: Memo }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isDone = memo.status === 'done';
-  const cd = getCompletionData(memo);
 
   const handleFlipToBack = () => setIsFlipped(true);
 
   const handleFlipToFront = () => {
     setIsFlipped(false);
-    // reset form state after flip animation ends
+    // Reset form state after flip animation ends
     setTimeout(() => setIsCompleting(false), 400);
   };
 
@@ -72,7 +56,7 @@ export function MemoCard({ memo: initialMemo }: { memo: Memo }) {
       // Brief pause so user sees the "done" back face, then flip to front
       setTimeout(() => setIsFlipped(false), 350);
     } catch {
-      // keep form visible on error; user can retry
+      // Keep form visible on error so user can retry
     } finally {
       setIsSubmitting(false);
     }
@@ -114,7 +98,7 @@ export function MemoCard({ memo: initialMemo }: { memo: Memo }) {
         {/* ─── Back Face ─── */}
         <div className="flip-back memo-card">
           {isDone ? (
-            <BackDone cd={cd} onReturn={handleFlipToFront} />
+            <BackDone memo={memo} onReturn={handleFlipToFront} />
           ) : isCompleting ? (
             <BackForm
               completionNote={completionNote}
@@ -177,7 +161,7 @@ function BackForm({
   completionNote: string;
   imagePreview: string | null;
   isSubmitting: boolean;
-  fileInputRef: React.RefObject<HTMLInputElement>;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
   onNoteChange: (v: string) => void;
   onImageChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onImageRemove: () => void;
@@ -246,10 +230,10 @@ function BackForm({
 }
 
 function BackDone({
-  cd,
+  memo,
   onReturn,
 }: {
-  cd: CompletionData;
+  memo: Memo;
   onReturn: () => void;
 }) {
   return (
@@ -257,9 +241,9 @@ function BackDone({
       <div className="flex items-center gap-2 mb-4">
         <span className="text-[var(--done-text)] text-xl leading-none">✓</span>
         <span className="font-medium text-[var(--done-text)]">已完成</span>
-        {cd.completed_at && (
+        {memo.completed_at && (
           <span className="ml-auto text-xs text-[var(--muted)]">
-            {new Date(cd.completed_at).toLocaleDateString('zh-CN', {
+            {new Date(memo.completed_at).toLocaleDateString('zh-CN', {
               month: 'long',
               day: 'numeric',
             })}
@@ -267,19 +251,19 @@ function BackDone({
         )}
       </div>
 
-      {cd.completion_note && (
-        <p className="text-base leading-relaxed mb-4">{cd.completion_note}</p>
+      {memo.completion_note && (
+        <p className="text-base leading-relaxed mb-4">{memo.completion_note}</p>
       )}
 
-      {cd.completion_image_url && (
+      {memo.completion_image_url && (
         <img
-          src={cd.completion_image_url}
+          src={memo.completion_image_url}
           alt="完成记录"
           className="w-full rounded-xl object-cover max-h-48 mb-4"
         />
       )}
 
-      {!cd.completion_note && !cd.completion_image_url && (
+      {!memo.completion_note && !memo.completion_image_url && (
         <p className="text-[var(--muted)] text-sm mb-4">已标记完成，未留下记录。</p>
       )}
 

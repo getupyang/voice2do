@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
+const SELECT_FIELDS =
+  'id, created_at, cleaned_text, intent, intent_data, status, completed_at, completion_note, completion_image_url';
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -12,9 +15,8 @@ export async function PATCH(
     const note = formData.get('completion_note') as string | null;
     const image = formData.get('completion_image') as File | null;
 
-    let imageUrl: string | undefined;
-
     // Upload image to Supabase Storage if provided
+    let imageUrl: string | null = null;
     if (image && image.size > 0) {
       try {
         const bytes = await image.arrayBuffer();
@@ -24,47 +26,33 @@ export async function PATCH(
 
         const { error: uploadError } = await supabase.storage
           .from('voice-memos')
-          .upload(filename, buffer, {
-            contentType: image.type,
-            upsert: true,
-          });
+          .upload(filename, buffer, { contentType: image.type, upsert: true });
 
-        if (!uploadError) {
+        if (uploadError) {
+          console.error('Image upload error:', uploadError);
+        } else {
           const { data: urlData } = supabase.storage
             .from('voice-memos')
             .getPublicUrl(filename);
           imageUrl = urlData.publicUrl;
-        } else {
-          console.error('Image upload error:', uploadError);
         }
       } catch (uploadErr) {
-        // Image upload failure is non-fatal; proceed without image
+        // Non-fatal: proceed without image
         console.error('Image upload exception:', uploadErr);
       }
     }
 
-    // Fetch existing intent_data to preserve it
-    const { data: existing } = await supabase
-      .from('memos')
-      .select('intent_data')
-      .eq('id', id)
-      .single();
-
-    const updatedIntentData = {
-      ...(existing?.intent_data || {}),
-      completion_note: note || undefined,
-      completion_image_url: imageUrl,
-      completed_at: new Date().toISOString(),
-    };
-
+    // Update dedicated completion columns — intentData is untouched
     const { data, error } = await supabase
       .from('memos')
       .update({
         status: 'done',
-        intent_data: updatedIntentData,
+        completed_at: new Date().toISOString(),
+        completion_note: note || null,
+        completion_image_url: imageUrl,
       })
       .eq('id', id)
-      .select('id, created_at, cleaned_text, intent, intent_data, status')
+      .select(SELECT_FIELDS)
       .single();
 
     if (error) {

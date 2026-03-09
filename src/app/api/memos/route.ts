@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     // 构建查询
     let query = supabase
       .from("memos")
-      .select("id, created_at, cleaned_text, intent, intent_data, status")
+      .select("id, created_at, cleaned_text, intent, intent_data, status, completed_at, completion_note, completion_image_url")
       .in("status", ["active", "done"])
       .order("created_at", { ascending: false })
       .limit(limit);

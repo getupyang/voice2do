@@ -9,6 +9,10 @@ export interface Memo {
   user_id: string | null;
   device_id: string | null;
   status: 'active' | 'done' | 'archived';
+  // 完成记录专用字段（需执行 supabase/migrations/20260309_add_completion_fields.sql）
+  completed_at: string | null;
+  completion_note: string | null;
+  completion_image_url: string | null;
 }
 
 // 创建备忘的输入类型
