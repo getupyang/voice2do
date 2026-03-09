@@ -393,6 +393,17 @@ body {
   color: var(--muted);
 }
 
+/* ===================== 意图标签（卡片内） ===================== */
+.intent-tag {
+  display: inline-block;
+  padding: 0.125rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  background: var(--accent-light);
+  color: var(--accent);
+  letter-spacing: 0.05em;
+}
+
 /* ===================== 分类标签样式 ===================== */
 .category-tab {
   padding: 0.5rem 1rem;

@@ -1,11 +1,16 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { Memo } from '@/types';
+import { useEffect, useRef, useState } from 'react';
+import { Memo, INTENT_LABELS } from '@/types';
 import { formatTime } from '@/lib/utils';
 
 export function MemoCard({ memo: initialMemo }: { memo: Memo }) {
   const [memo, setMemo] = useState(initialMemo);
+
+  // 当 prop 变化时同步（筛选切换时 React 可能复用同位置的实例）
+  useEffect(() => {
+    setMemo(initialMemo);
+  }, [initialMemo.id]);
   const [isFlipped, setIsFlipped] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [completionNote, setCompletionNote] = useState('');
@@ -89,8 +94,8 @@ export function MemoCard({ memo: initialMemo }: { memo: Memo }) {
             <div className="mt-2 flex items-center justify-between text-sm text-[var(--muted)]">
               <time>{formatTime(memo.created_at)}</time>
               {memo.intent !== 'memo' && (
-                <span className="px-2 py-0.5 rounded-full bg-[var(--accent-light)] text-xs">
-                  {memo.intent}
+                <span className="intent-tag">
+                  {INTENT_LABELS[memo.intent]}
                 </span>
               )}
             </div>
