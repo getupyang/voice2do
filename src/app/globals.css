@@ -9,6 +9,11 @@
   --card-border: #F0EBE3;
   --accent: #D4A574;
   --accent-light: #F5E6D3;
+  /* 已完成状态 */
+  --done-bg: #F2F8F1;
+  --done-border: #8EBF84;
+  --done-badge-bg: #D0EAC8;
+  --done-text: #3A7434;
 }
 
 @theme inline {
@@ -24,12 +29,11 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  /* 使用系统字体栈，优先使用中文衬线字体 */
   font-family:
-    "Songti SC",           /* macOS 宋体 */
-    "Noto Serif CJK SC",   /* Linux/Android */
+    "Songti SC",
+    "Noto Serif CJK SC",
     "Source Han Serif SC",
-    "STSong",              /* Windows 宋体 */
+    "STSong",
     "SimSun",
     Georgia,
     "Times New Roman",
@@ -45,8 +49,9 @@ body {
   letter-spacing: 0.05em;
 }
 
-/* 卡片样式 */
+/* ===================== 卡片样式 ===================== */
 .memo-card {
+  position: relative;       /* 承载 done-dot 绝对定位 */
   background: var(--card);
   border: 1px solid var(--card-border);
   border-radius: 1rem;
@@ -85,13 +90,6 @@ body {
 }
 
 /* ===================== 已完成卡片样式 ===================== */
-:root {
-  --done-bg: #F2F8F1;
-  --done-border: #8EBF84;
-  --done-badge-bg: #D0EAC8;
-  --done-text: #3A7434;
-}
-
 .memo-card-done {
   background: var(--done-bg);
   border-color: var(--done-border);
@@ -101,24 +99,22 @@ body {
   opacity: 0.6;
 }
 
-.done-badge {
-  display: inline-flex;
+/* ① 右上角小圆点角标：绝对定位，不影响卡片高度 */
+.done-dot {
+  position: absolute;
+  top: 0.9rem;
+  right: 0.9rem;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  background: var(--done-border);
+  color: white;
+  font-size: 0.62rem;
+  display: flex;
   align-items: center;
-  gap: 0.3rem;
-  font-size: 0.72rem;
-  color: var(--done-text);
-  background: var(--done-badge-bg);
-  padding: 0.18rem 0.6rem;
-  border-radius: 9999px;
-  margin-bottom: 0.65rem;
-  letter-spacing: 0.04em;
-}
-
-/* ===================== 翻转提示 ===================== */
-.flip-hint {
-  font-size: 0.68rem;
-  opacity: 0.3;
-  letter-spacing: 0.06em;
+  justify-content: center;
+  line-height: 1;
+  pointer-events: none;   /* 不拦截点击事件 */
 }
 
 /* ===================== 背面：动作区 ===================== */
@@ -129,7 +125,13 @@ body {
   justify-content: center;
   text-align: center;
   padding: 0.5rem 0;
-  gap: 0;
+  gap: 0.75rem;
+}
+
+.back-action-hint {
+  font-size: 0.7rem;
+  color: var(--muted);
+  opacity: 0.5;
 }
 
 /* ===================== 完成按钮 ===================== */
@@ -153,24 +155,6 @@ body {
   background: #c49464;
   transform: translateY(-1px);
   box-shadow: 0 4px 14px rgba(212, 165, 116, 0.45);
-}
-
-/* ===================== 返回链接 ===================== */
-.return-button {
-  display: inline-block;
-  margin-top: 1rem;
-  font-size: 0.82rem;
-  color: var(--muted);
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: inherit;
-  transition: color 0.2s;
-  padding: 0.25rem 0;
-}
-
-.return-button:hover {
-  color: var(--foreground);
 }
 
 /* ===================== 完成表单 ===================== */
@@ -250,6 +234,161 @@ body {
 .form-submit-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ===================== 背面：已完成状态 ===================== */
+.back-done-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.back-done-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.back-done-check {
+  color: var(--done-text);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.back-done-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--done-text);
+}
+
+.back-done-time {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+/* ⑤ 记录预览区：点击打开弹窗 */
+.back-done-preview {
+  border: 1px solid var(--done-border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+
+.back-done-preview:hover {
+  box-shadow: 0 2px 12px rgba(142, 191, 132, 0.3);
+}
+
+.back-done-preview-img {
+  width: 100%;
+  max-height: 10rem;
+  object-fit: cover;
+  display: block;
+}
+
+.back-done-preview-note {
+  padding: 0.6rem 0.8rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--foreground);
+  /* 超长截断 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.back-done-preview-hint {
+  display: block;
+  text-align: center;
+  font-size: 0.68rem;
+  color: var(--muted);
+  padding: 0.3rem 0.5rem;
+  background: var(--done-bg);
+  opacity: 0.8;
+}
+
+.back-done-empty {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.back-done-return-hint {
+  font-size: 0.68rem;
+  color: var(--muted);
+  opacity: 0.4;
+  text-align: center;
+  margin-top: auto;
+}
+
+/* ===================== 完成记录弹窗 ===================== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 1.5rem;
+  /* 防止滚动穿透 */
+  overscroll-behavior: contain;
+}
+
+.modal-panel {
+  position: relative;
+  background: var(--card);
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 400px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+
+.modal-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 50%;
+  border: none;
+  background: var(--background);
+  color: var(--muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.modal-close:hover {
+  background: var(--card-border);
+}
+
+.modal-image {
+  width: 100%;
+  border-radius: 1rem;
+  object-fit: contain;
+  max-height: 55vh;
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.modal-note {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--foreground);
+  margin-bottom: 1rem;
+}
+
+.modal-time {
+  font-size: 0.75rem;
+  color: var(--muted);
 }
 
 /* ===================== 分类标签样式 ===================== */

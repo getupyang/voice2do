@@ -12,15 +12,13 @@ export function MemoCard({ memo: initialMemo }: { memo: Memo }) {
   const [completionImage, setCompletionImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isDone = memo.status === 'done';
 
-  const handleFlipToBack = () => setIsFlipped(true);
-
   const handleFlipToFront = () => {
     setIsFlipped(false);
-    // Reset form state after flip animation ends
     setTimeout(() => setIsCompleting(false), 400);
   };
 
@@ -53,8 +51,7 @@ export function MemoCard({ memo: initialMemo }: { memo: Memo }) {
       const json = await res.json();
       setMemo(json.data);
       setIsCompleting(false);
-      // Brief pause so user sees the "done" back face, then flip to front
-      setTimeout(() => setIsFlipped(false), 350);
+      // Stay on back face showing the completion record; user taps blank to return
     } catch {
       // Keep form visible on error so user can retry
     } finally {
@@ -62,87 +59,78 @@ export function MemoCard({ memo: initialMemo }: { memo: Memo }) {
     }
   };
 
+  // Back face: click blank area to flip back, EXCEPT when filling in the form
+  const handleBackClick = () => {
+    if (!isCompleting) handleFlipToFront();
+  };
+
   return (
-    <div className="flip-container">
-      <div className={`flip-inner${isFlipped ? ' flipped' : ''}`}>
-        {/* ─── Front Face ─── */}
-        <article
-          className={`flip-front memo-card${isDone ? ' memo-card-done' : ''}`}
-          onClick={handleFlipToBack}
-          style={{ cursor: 'pointer' }}
-        >
-          {isDone && (
-            <div className="done-badge">
-              <span>✓</span>
-              <span>已完成</span>
-            </div>
-          )}
+    <>
+      <div className="flip-container">
+        <div className={`flip-inner${isFlipped ? ' flipped' : ''}`}>
+          {/* ─── Front Face ─── */}
+          <article
+            className={`flip-front memo-card${isDone ? ' memo-card-done' : ''}`}
+            onClick={() => setIsFlipped(true)}
+            style={{ cursor: 'pointer' }}
+          >
+            {/* ① 已完成角标：绝对定位小圆圈，不占布局空间 */}
+            {isDone && <span className="done-dot">✓</span>}
 
-          <p className={`text-lg leading-relaxed${isDone ? ' memo-text-done' : ''}`}>
-            {memo.cleaned_text}
-          </p>
+            <p className={`text-lg leading-relaxed${isDone ? ' memo-text-done' : ''}`}>
+              {memo.cleaned_text}
+            </p>
 
-          <div className="mt-4 flex items-center justify-between text-sm text-[var(--muted)]">
-            <time>{formatTime(memo.created_at)}</time>
-            <div className="flex items-center gap-2">
+            <div className="mt-4 flex items-center justify-between text-sm text-[var(--muted)]">
+              <time>{formatTime(memo.created_at)}</time>
               {memo.intent !== 'memo' && (
                 <span className="px-2 py-0.5 rounded-full bg-[var(--accent-light)] text-xs">
                   {memo.intent}
                 </span>
               )}
-              <span className="flip-hint">轻触翻转</span>
             </div>
-          </div>
-        </article>
+          </article>
 
-        {/* ─── Back Face ─── */}
-        <div className="flip-back memo-card">
-          {isDone ? (
-            <BackDone memo={memo} onReturn={handleFlipToFront} />
-          ) : isCompleting ? (
-            <BackForm
-              completionNote={completionNote}
-              imagePreview={imagePreview}
-              isSubmitting={isSubmitting}
-              fileInputRef={fileInputRef}
-              onNoteChange={setCompletionNote}
-              onImageChange={handleImageChange}
-              onImageRemove={() => {
-                setCompletionImage(null);
-                setImagePreview(null);
-              }}
-              onCancel={() => setIsCompleting(false)}
-              onSubmit={handleComplete}
-            />
-          ) : (
-            <BackAction
-              onComplete={() => setIsCompleting(true)}
-              onReturn={handleFlipToFront}
-            />
-          )}
+          {/* ─── Back Face ─── ③ 点击空白处翻回正面 */}
+          <div className="flip-back memo-card" onClick={handleBackClick} style={{ cursor: 'pointer' }}>
+            {isDone ? (
+              <BackDone memo={memo} onOpenModal={() => setModalOpen(true)} />
+            ) : isCompleting ? (
+              <BackForm
+                completionNote={completionNote}
+                imagePreview={imagePreview}
+                isSubmitting={isSubmitting}
+                fileInputRef={fileInputRef}
+                onNoteChange={setCompletionNote}
+                onImageChange={handleImageChange}
+                onImageRemove={() => { setCompletionImage(null); setImagePreview(null); }}
+                onCancel={() => setIsCompleting(false)}
+                onSubmit={handleComplete}
+              />
+            ) : (
+              <BackAction onComplete={(e) => { e.stopPropagation(); setIsCompleting(true); }} />
+            )}
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* ⑤ 完成记录弹窗 */}
+      {modalOpen && (
+        <CompletionModal memo={memo} onClose={() => setModalOpen(false)} />
+      )}
+    </>
   );
 }
 
 /* ─── Sub-components ──────────────────────────────────────── */
 
-function BackAction({
-  onComplete,
-  onReturn,
-}: {
-  onComplete: () => void;
-  onReturn: () => void;
-}) {
+function BackAction({ onComplete }: { onComplete: (e: React.MouseEvent) => void }) {
   return (
     <div className="back-action">
       <button onClick={onComplete} className="complete-button">
         ✓&nbsp;标记完成
       </button>
-      <button onClick={onReturn} className="return-button">
-        ← 返回
-      </button>
+      <p className="back-action-hint">点击空白处返回</p>
     </div>
   );
 }
@@ -168,8 +156,9 @@ function BackForm({
   onCancel: () => void;
   onSubmit: () => void;
 }) {
+  // Stop propagation so tapping anywhere inside form doesn't flip back
   return (
-    <div>
+    <div onClick={(e) => e.stopPropagation()}>
       <h3 className="font-medium mb-3 text-base">记录完成情况</h3>
 
       <textarea
@@ -191,11 +180,7 @@ function BackForm({
         />
         {imagePreview ? (
           <div className="relative rounded-xl overflow-hidden">
-            <img
-              src={imagePreview}
-              alt="Preview"
-              className="w-full object-cover max-h-32"
-            />
+            <img src={imagePreview} alt="Preview" className="w-full object-cover max-h-32" />
             <button
               onClick={onImageRemove}
               className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/50 text-white text-xs flex items-center justify-center"
@@ -204,24 +189,15 @@ function BackForm({
             </button>
           </div>
         ) : (
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="image-upload-button"
-          >
+          <button onClick={() => fileInputRef.current?.click()} className="image-upload-button">
             + 添加图片（可选）
           </button>
         )}
       </div>
 
       <div className="mt-4 flex gap-3">
-        <button onClick={onCancel} className="form-cancel-button">
-          取消
-        </button>
-        <button
-          onClick={onSubmit}
-          disabled={isSubmitting}
-          className="form-submit-button"
-        >
+        <button onClick={onCancel} className="form-cancel-button">取消</button>
+        <button onClick={onSubmit} disabled={isSubmitting} className="form-submit-button">
           {isSubmitting ? '保存中…' : '✓ 完成'}
         </button>
       </div>
@@ -229,20 +205,17 @@ function BackForm({
   );
 }
 
-function BackDone({
-  memo,
-  onReturn,
-}: {
-  memo: Memo;
-  onReturn: () => void;
-}) {
+function BackDone({ memo, onOpenModal }: { memo: Memo; onOpenModal: () => void }) {
+  const hasRecord = !!(memo.completion_note || memo.completion_image_url);
+
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-[var(--done-text)] text-xl leading-none">✓</span>
-        <span className="font-medium text-[var(--done-text)]">已完成</span>
+    <div className="back-done-wrapper">
+      {/* 完成时间行 */}
+      <div className="back-done-header">
+        <span className="back-done-check">✓</span>
+        <span className="back-done-label">已完成</span>
         {memo.completed_at && (
-          <span className="ml-auto text-xs text-[var(--muted)]">
+          <span className="back-done-time">
             {new Date(memo.completed_at).toLocaleDateString('zh-CN', {
               month: 'long',
               day: 'numeric',
@@ -251,25 +224,63 @@ function BackDone({
         )}
       </div>
 
-      {memo.completion_note && (
-        <p className="text-base leading-relaxed mb-4">{memo.completion_note}</p>
+      {/* 记录预览区（点击打开弹窗） */}
+      {hasRecord ? (
+        <div
+          className="back-done-preview"
+          onClick={(e) => { e.stopPropagation(); onOpenModal(); }}
+        >
+          {memo.completion_image_url && (
+            <img
+              src={memo.completion_image_url}
+              alt="完成记录"
+              className="back-done-preview-img"
+            />
+          )}
+          {memo.completion_note && (
+            <p className="back-done-preview-note">{memo.completion_note}</p>
+          )}
+          <span className="back-done-preview-hint">点击查看完整记录</span>
+        </div>
+      ) : (
+        <p className="back-done-empty">仅标记完成，未留下记录。</p>
       )}
 
-      {memo.completion_image_url && (
-        <img
-          src={memo.completion_image_url}
-          alt="完成记录"
-          className="w-full rounded-xl object-cover max-h-48 mb-4"
-        />
-      )}
+      <p className="back-done-return-hint">点击空白处返回</p>
+    </div>
+  );
+}
 
-      {!memo.completion_note && !memo.completion_image_url && (
-        <p className="text-[var(--muted)] text-sm mb-4">已标记完成，未留下记录。</p>
-      )}
+function CompletionModal({ memo, onClose }: { memo: Memo; onClose: () => void }) {
+  const dateStr = memo.completed_at
+    ? new Date(memo.completed_at).toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : null;
 
-      <button onClick={onReturn} className="return-button" style={{ marginTop: '0.5rem' }}>
-        ← 返回
-      </button>
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>✕</button>
+
+        {memo.completion_image_url && (
+          <img
+            src={memo.completion_image_url}
+            alt="完成记录"
+            className="modal-image"
+          />
+        )}
+
+        {memo.completion_note && (
+          <p className="modal-note">{memo.completion_note}</p>
+        )}
+
+        {dateStr && <p className="modal-time">完成于 {dateStr}</p>}
+      </div>
     </div>
   );
 }
