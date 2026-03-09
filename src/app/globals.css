@@ -58,7 +58,201 @@ body {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
 }
 
-/* 分类标签样式 */
+/* ===================== 卡片翻转动效 ===================== */
+.flip-container {
+  perspective: 1200px;
+}
+
+.flip-inner {
+  display: grid;
+  transform-style: preserve-3d;
+  transition: transform 0.65s cubic-bezier(0.35, 0.15, 0.15, 0.95);
+}
+
+.flip-inner.flipped {
+  transform: rotateY(180deg);
+}
+
+.flip-front,
+.flip-back {
+  grid-area: 1 / 1;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.flip-back {
+  transform: rotateY(180deg);
+}
+
+/* ===================== 已完成卡片样式 ===================== */
+:root {
+  --done-bg: #F2F8F1;
+  --done-border: #8EBF84;
+  --done-badge-bg: #D0EAC8;
+  --done-text: #3A7434;
+}
+
+.memo-card-done {
+  background: var(--done-bg);
+  border-color: var(--done-border);
+}
+
+.memo-text-done {
+  opacity: 0.6;
+}
+
+.done-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  color: var(--done-text);
+  background: var(--done-badge-bg);
+  padding: 0.18rem 0.6rem;
+  border-radius: 9999px;
+  margin-bottom: 0.65rem;
+  letter-spacing: 0.04em;
+}
+
+/* ===================== 翻转提示 ===================== */
+.flip-hint {
+  font-size: 0.68rem;
+  opacity: 0.3;
+  letter-spacing: 0.06em;
+}
+
+/* ===================== 背面：动作区 ===================== */
+.back-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0.5rem 0;
+  gap: 0;
+}
+
+/* ===================== 完成按钮 ===================== */
+.complete-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.7rem 2rem;
+  border-radius: 9999px;
+  background: var(--accent);
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 500;
+  font-family: inherit;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+}
+
+.complete-button:hover {
+  background: #c49464;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(212, 165, 116, 0.45);
+}
+
+/* ===================== 返回链接 ===================== */
+.return-button {
+  display: inline-block;
+  margin-top: 1rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: color 0.2s;
+  padding: 0.25rem 0;
+}
+
+.return-button:hover {
+  color: var(--foreground);
+}
+
+/* ===================== 完成表单 ===================== */
+.completion-textarea {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--card-border);
+  border-radius: 0.75rem;
+  background: var(--background);
+  font-family: inherit;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  resize: none;
+  outline: none;
+  transition: border-color 0.2s;
+  color: var(--foreground);
+}
+
+.completion-textarea:focus {
+  border-color: var(--accent);
+}
+
+.image-upload-button {
+  width: 100%;
+  padding: 0.7rem;
+  border: 1.5px dashed var(--card-border);
+  border-radius: 0.75rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.image-upload-button:hover {
+  border-color: var(--accent);
+  color: var(--foreground);
+}
+
+.form-cancel-button {
+  flex: 1;
+  padding: 0.6rem;
+  border-radius: 9999px;
+  border: 1px solid var(--card-border);
+  font-size: 0.82rem;
+  color: var(--muted);
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.form-cancel-button:hover {
+  border-color: var(--accent);
+  color: var(--foreground);
+}
+
+.form-submit-button {
+  flex: 1;
+  padding: 0.6rem;
+  border-radius: 9999px;
+  border: none;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: white;
+  background: var(--accent);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.form-submit-button:hover:not(:disabled) {
+  background: #c49464;
+}
+
+.form-submit-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ===================== 分类标签样式 ===================== */
 .category-tab {
   padding: 0.5rem 1rem;
   border-radius: 9999px;

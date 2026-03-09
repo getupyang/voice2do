@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from("memos")
       .select("id, created_at, cleaned_text, intent, intent_data, status")
-      .eq("status", "active")
+      .in("status", ["active", "done"])
       .order("created_at", { ascending: false })
       .limit(limit);
 
