@@ -81,7 +81,7 @@ export function MemoCard({ memo: initialMemo }: { memo: Memo }) {
               {memo.cleaned_text}
             </p>
 
-            <div className="mt-4 flex items-center justify-between text-sm text-[var(--muted)]">
+            <div className="mt-2 flex items-center justify-between text-sm text-[var(--muted)]">
               <time>{formatTime(memo.created_at)}</time>
               {memo.intent !== 'memo' && (
                 <span className="px-2 py-0.5 rounded-full bg-[var(--accent-light)] text-xs">

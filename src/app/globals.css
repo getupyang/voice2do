@@ -55,7 +55,7 @@ body {
   background: var(--card);
   border: 1px solid var(--card-border);
   border-radius: 1rem;
-  padding: 1.5rem;
+  padding: 1.25rem 1.5rem 1rem;
   transition: box-shadow 0.2s ease;
 }
 
