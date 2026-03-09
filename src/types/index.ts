@@ -1,10 +1,21 @@
+// 意图类型
+export type IntentType = 'memo' | 'movie' | 'place' | 'todo';
+
+// 意图标签映射
+export const INTENT_LABELS: Record<IntentType, string> = {
+  movie: '电影',
+  place: '目的地',
+  todo: '要做的事',
+  memo: '记录',
+};
+
 // 备忘记录类型
 export interface Memo {
   id: string;
   created_at: string;
   raw_text: string;
   cleaned_text: string;
-  intent: 'memo' | 'movie' | 'place' | 'todo';
+  intent: IntentType;
   intent_data: Record<string, unknown> | null;
   user_id: string | null;
   device_id: string | null;

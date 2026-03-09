@@ -1,6 +1,5 @@
-import { Memo, TimelineGroup } from "@/types";
-import { groupMemosByTime } from "@/lib/utils";
-import { MemoCard } from "@/components/MemoCard";
+import { Memo } from "@/types";
+import MemoList from "@/components/MemoList";
 
 async function getMemos(): Promise<Memo[]> {
   const baseUrl = process.env.VERCEL_URL
@@ -27,7 +26,6 @@ async function getMemos(): Promise<Memo[]> {
 
 export default async function Home() {
   const memos = await getMemos();
-  const groups = groupMemosByTime(memos);
 
   return (
     <div className="min-h-screen">
@@ -41,47 +39,18 @@ export default async function Home() {
 
       {/* 主内容 */}
       <main className="max-w-2xl mx-auto px-6 py-8">
-        {groups.length === 0 ? (
-          <EmptyState />
+        {memos.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="text-6xl mb-6">🎙️</div>
+            <h2 className="text-xl font-medium mb-2">还没有任何记录</h2>
+            <p className="text-[var(--muted)] max-w-sm">
+              使用 iOS 捷径录制一段语音，你的想法就会出现在这里
+            </p>
+          </div>
         ) : (
-          <Timeline groups={groups} />
+          <MemoList memos={memos} />
         )}
       </main>
     </div>
   );
 }
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 text-center">
-      <div className="text-6xl mb-6">🎙️</div>
-      <h2 className="text-xl font-medium mb-2">还没有任何记录</h2>
-      <p className="text-[var(--muted)] max-w-sm">
-        使用 iOS 捷径录制一段语音，你的想法就会出现在这里
-      </p>
-    </div>
-  );
-}
-
-function Timeline({ groups }: { groups: TimelineGroup[] }) {
-  return (
-    <div className="space-y-8">
-      {groups.map((group) => (
-        <section key={group.label}>
-          {/* 时间分组标签 */}
-          <div className="timeline-group-label mb-4 pl-4 border-l-2 border-[var(--accent)]">
-            {group.label}
-          </div>
-
-          {/* 该分组下的备忘 */}
-          <div className="space-y-4">
-            {group.memos.map((memo) => (
-              <MemoCard key={memo.id} memo={memo} />
-            ))}
-          </div>
-        </section>
-      ))}
-    </div>
-  );
-}
-
