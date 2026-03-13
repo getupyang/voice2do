@@ -28,39 +28,58 @@ export default function MemoList({ memos }: { memos: Memo[] }) {
   const groups = groupMemosByTime(filteredMemos);
 
   return (
-    <>
-      {hasNonMemoIntents && (
-        <div className="flex gap-2 mb-8 flex-wrap">
-          {FILTER_OPTIONS.map(({ value, label }) => {
-            if (value !== 'all' && !intentCounts[value]) return null;
-            const isActive = activeFilter === value;
-            const count = value === 'all' ? null : intentCounts[value];
-            return (
-              <button
-                key={value}
-                onClick={() => setActiveFilter(value)}
-                className={`category-tab${isActive ? ' active' : ''}`}
-              >
-                {label}
-                {count != null && <span className="ml-1 opacity-60">{count}</span>}
-              </button>
-            );
-          })}
+    <div className="min-h-screen">
+      {/* 顶部导航：标题 + 筛选栏，整体 sticky */}
+      <header className="sticky top-0 z-30 bg-[var(--background)] border-b border-[var(--card-border)]">
+        <div className="px-6 pt-4 pb-3 text-center">
+          <h1 className="text-xl font-semibold">Voice2Do</h1>
+          <p className="text-sm text-[var(--muted)] mt-1">用声音记录每一个灵感</p>
         </div>
-      )}
 
-      {groups.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <p className="text-[var(--muted)]">
-            {activeFilter === 'all'
-              ? '还没有任何记录'
-              : `还没有「${INTENT_LABELS[activeFilter]}」的记录`}
-          </p>
-        </div>
-      ) : (
-        <Timeline groups={groups} />
-      )}
-    </>
+        {hasNonMemoIntents && (
+          <div className="max-w-2xl mx-auto px-6 pb-3">
+            <div className="flex gap-2 flex-wrap">
+              {FILTER_OPTIONS.map(({ value, label }) => {
+                if (value !== 'all' && !intentCounts[value]) return null;
+                const isActive = activeFilter === value;
+                const count = value === 'all' ? null : intentCounts[value];
+                return (
+                  <button
+                    key={value}
+                    onClick={() => setActiveFilter(value)}
+                    className={`category-tab${isActive ? ' active' : ''}`}
+                  >
+                    {label}
+                    {count != null && <span className="ml-1 opacity-60">{count}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </header>
+
+      {/* 主内容 */}
+      <main className="max-w-2xl mx-auto px-6 py-8">
+        {memos.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="text-6xl mb-6">🎙️</div>
+            <h2 className="text-xl font-medium mb-2">还没有任何记录</h2>
+            <p className="text-[var(--muted)] max-w-sm">
+              使用 iOS 捷径录制一段语音，你的想法就会出现在这里
+            </p>
+          </div>
+        ) : groups.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <p className="text-[var(--muted)]">
+              还没有「{activeFilter !== 'all' ? INTENT_LABELS[activeFilter] : ''}」的记录
+            </p>
+          </div>
+        ) : (
+          <Timeline groups={groups} />
+        )}
+      </main>
+    </div>
   );
 }
 
