@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { transcribeWithIflytek } from "@/lib/iflytek";
 import { extractPcm } from "@/lib/audio";
+import { classifyMemo } from "@/lib/gemini";
 import { supabase } from "@/lib/supabase";
 
 export async function POST(request: NextRequest) {
@@ -118,7 +119,6 @@ export async function POST(request: NextRequest) {
 
     // Step 4: 转换音频为 PCM 并调用讯飞转写
     let rawText: string;
-    let cleanedText: string;
 
     try {
       console.log("Extracting PCM from audio...");
@@ -127,7 +127,6 @@ export async function POST(request: NextRequest) {
 
       console.log("Calling iFlytek transcription...");
       rawText = await transcribeWithIflytek(pcmBuffer);
-      cleanedText = rawText;
       console.log("Transcription result:", rawText.substring(0, 50));
     } catch (transcribeError) {
       // 转写失败，更新记录状态为 error
@@ -154,12 +153,19 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Step 5: 更新数据库记录
+    // Step 5: Gemini 意图识别 + 结构化信息提取 + 文本清理
+    console.log("Calling Gemini for classification...");
+    const classification = await classifyMemo(rawText, new Date());
+    console.log("Classification result:", classification.intent, classification.cleaned_text.substring(0, 50));
+
+    // Step 6: 更新数据库记录
     const { data: updatedMemo, error: updateError } = await supabase
       .from("memos")
       .update({
         raw_text: rawText,
-        cleaned_text: cleanedText,
+        cleaned_text: classification.cleaned_text,
+        intent: classification.intent,
+        intent_data: classification.intent_data,
         status: "active",
       })
       .eq("id", memoId)
@@ -180,6 +186,8 @@ export async function POST(request: NextRequest) {
         id: updatedMemo.id,
         raw_text: updatedMemo.raw_text,
         cleaned_text: updatedMemo.cleaned_text,
+        intent: updatedMemo.intent,
+        intent_data: updatedMemo.intent_data,
         created_at: updatedMemo.created_at,
       },
     });
