@@ -1,17 +1,13 @@
-// 意图数据：日历事件
-export interface CalendarIntentData {
-  title: string;
-  datetime: string;        // ISO 8601，Asia/Shanghai
-  end_datetime?: string;
-  location?: string;
-  is_all_day: boolean;
-  notes?: string;
-}
-
-// 意图数据：代办事项
+// todo 意图的结构化数据
+// - 有 datetime 字段 → 时间型任务，iOS 捷径写入「Voice2Do」日历
+// - 无 datetime 只有 deadline 或无日期 → 代办任务，iOS 捷径写入「Voice2Do」提醒
 export interface TodoIntentData {
   title: string;
-  due_date?: string;       // YYYY-MM-DD
+  datetime?: string;       // ISO 8601 +08:00，有具体时间时存在
+  end_datetime?: string;
+  location?: string;
+  is_all_day?: boolean;
+  deadline?: string;       // YYYY-MM-DD，截止日期（无具体时分时用）
   notes?: string;
 }
 
@@ -21,8 +17,8 @@ export interface Memo {
   created_at: string;
   raw_text: string;
   cleaned_text: string;
-  intent: 'memo' | 'movie' | 'place' | 'todo' | 'calendar';
-  intent_data: CalendarIntentData | TodoIntentData | Record<string, unknown> | null;
+  intent: 'memo' | 'movie' | 'place' | 'todo';
+  intent_data: TodoIntentData | Record<string, unknown> | null;
   user_id: string | null;
   device_id: string | null;
   status: 'active' | 'done' | 'archived';

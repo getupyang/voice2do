@@ -2,51 +2,41 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-export interface CalendarIntentData {
-  title: string;
-  datetime: string;        // ISO 8601, Asia/Shanghai
-  end_datetime?: string;
-  location?: string;
-  is_all_day: boolean;
-  notes?: string;
-}
-
 export interface TodoIntentData {
   title: string;
-  due_date?: string;       // YYYY-MM-DD
+  datetime?: string;       // ISO 8601 +08:00，有具体时间时存在（→ iPhone 日历）
+  end_datetime?: string;
+  location?: string;
+  is_all_day?: boolean;
+  deadline?: string;       // YYYY-MM-DD，无具体时间但有截止日期（→ iPhone 提醒）
   notes?: string;
-}
-
-export interface MemoIntentData {
-  title?: string;
 }
 
 export interface ClassificationResult {
-  intent: "calendar" | "todo" | "memo";
+  intent: "todo" | "memo";
   cleaned_text: string;
-  intent_data: CalendarIntentData | TodoIntentData | MemoIntentData | null;
+  intent_data: TodoIntentData | null;
 }
 
-const SYSTEM_PROMPT = `你是一个中文语音备忘录助手，负责分析转写的语音内容，去除语气词并提取结构化信息。
+const SYSTEM_PROMPT = `你是一个中文语音备忘录助手，分析转写的语音内容，去除语气词并提取结构化信息。
 
 判断规则：
-- intent = "calendar"：内容涉及具体时间安排（会议、约会、出行、活动、提醒我几点做什么等），**只要能识别到时间或地点就用 calendar**
-- intent = "todo"：需要完成的任务或代办事项（买东西、联系某人、处理某件事），但没有具体时间
-- intent = "memo"：其他情况（想法、灵感、随手记录）
+- intent = "todo"：内容需要行动——包括有具体时间的日程安排（会议、约会、出行、活动），也包括无具体时间的代办事项（买东西、联系某人、处理某事）
+- intent = "memo"：纯粹的记录、想法、灵感，不需要行动
 
 时间解析规则：
 - 所有时间转为 ISO 8601 格式，时区 +08:00
 - "明天" = 当前日期 +1 天
 - "后天" = 当前日期 +2 天
 - "下周X" = 下一个周X
-- 未指定具体时分时：会议/约会默认1小时；提醒类用 is_all_day: true
-- 若只说了时间没说日期，默认今天；若今天的那个时间已过，用明天
+- 只说了时间没说日期：今天；若今天该时间已过则用明天
+- 有具体时分时填 datetime；只有日期没有时分时填 deadline
 
-返回严格的 JSON，不要有任何额外文字，格式如下：
+返回严格的 JSON，不要有任何额外文字。
 
-对于 calendar：
+有具体时间的待办（→ iPhone 日历）：
 {
-  "intent": "calendar",
+  "intent": "todo",
   "cleaned_text": "去除语气词后的简洁文本",
   "intent_data": {
     "title": "简短标题（15字以内）",
@@ -58,18 +48,18 @@ const SYSTEM_PROMPT = `你是一个中文语音备忘录助手，负责分析转
   }
 }
 
-对于 todo：
+无具体时间的代办事项（→ iPhone 提醒）：
 {
   "intent": "todo",
   "cleaned_text": "去除语气词后的简洁文本",
   "intent_data": {
     "title": "简短标题（15字以内）",
-    "due_date": "2026-04-05",
+    "deadline": "2026-04-05",
     "notes": "补充说明（如有，否则省略）"
   }
 }
 
-对于 memo：
+普通备忘：
 {
   "intent": "memo",
   "cleaned_text": "去除语气词后的简洁文本",
@@ -103,7 +93,6 @@ ${text}`;
     const result = await model.generateContent(prompt);
     const responseText = result.response.text().trim();
 
-    // 去掉可能的 markdown 代码块包裹
     const jsonText = responseText
       .replace(/^```(?:json)?\n?/, "")
       .replace(/\n?```$/, "")
@@ -111,14 +100,12 @@ ${text}`;
 
     const parsed = JSON.parse(jsonText) as ClassificationResult;
 
-    // 确保字段完整
     if (!parsed.intent) parsed.intent = "memo";
     if (!parsed.cleaned_text) parsed.cleaned_text = text;
 
     return parsed;
   } catch (err) {
     console.error("Gemini classification failed:", err);
-    // 降级：返回原始文本作为 memo
     return {
       intent: "memo",
       cleaned_text: text,

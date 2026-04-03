@@ -1,4 +1,4 @@
-import { Memo, TimelineGroup, CalendarIntentData, TodoIntentData } from "@/types";
+import { Memo, TimelineGroup, TodoIntentData } from "@/types";
 import { groupMemosByTime, formatTime } from "@/lib/utils";
 
 async function getMemos(): Promise<Memo[]> {
@@ -84,45 +84,26 @@ function Timeline({ groups }: { groups: TimelineGroup[] }) {
   );
 }
 
-// 格式化日历事件时间显示
-function formatEventDatetime(datetime: string, isAllDay: boolean): string {
-  const date = new Date(datetime);
-  if (isAllDay) {
-    return date.toLocaleDateString("zh-CN", {
-      month: "long",
-      day: "numeric",
-      weekday: "short",
-      timeZone: "Asia/Shanghai",
-    });
-  }
-  return date.toLocaleString("zh-CN", {
-    month: "numeric",
-    day: "numeric",
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Asia/Shanghai",
-  });
-}
-
 function MemoCard({ memo }: { memo: Memo }) {
-  const isCalendar = memo.intent === "calendar";
-  const isTodo = memo.intent === "todo";
+  const todoData = memo.intent === "todo"
+    ? (memo.intent_data as TodoIntentData | null)
+    : null;
 
-  const calendarData = isCalendar ? (memo.intent_data as CalendarIntentData) : null;
-  const todoData = isTodo ? (memo.intent_data as TodoIntentData) : null;
+  // todo + datetime → 日历型；todo + 无 datetime → 提醒型
+  const isCalendarEvent = !!todoData?.datetime;
+  const isReminder = memo.intent === "todo" && !isCalendarEvent;
 
   return (
     <article className="memo-card">
-      {/* 意图标签行 */}
-      {(isCalendar || isTodo) && (
+      {/* Voice2Do 标签 */}
+      {(isCalendarEvent || isReminder) && (
         <div className="flex items-center gap-2 mb-3">
-          {isCalendar && (
+          {isCalendarEvent && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
               <span>📅</span> Voice2Do 日历
             </span>
           )}
-          {isTodo && (
+          {isReminder && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
               <span>✓</span> Voice2Do 提醒
             </span>
@@ -134,35 +115,40 @@ function MemoCard({ memo }: { memo: Memo }) {
       <p className="text-lg leading-relaxed">{memo.cleaned_text}</p>
 
       {/* 日历事件详情 */}
-      {calendarData && (
+      {isCalendarEvent && todoData && (
         <div className="mt-3 space-y-1 text-sm text-[var(--muted)]">
           <div className="flex items-center gap-2">
             <span className="text-base">🕐</span>
-            <span>{formatEventDatetime(calendarData.datetime, calendarData.is_all_day)}</span>
-            {calendarData.end_datetime && !calendarData.is_all_day && (
-              <span>— {new Date(calendarData.end_datetime).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Shanghai" })}</span>
+            <span>
+              {todoData.is_all_day
+                ? new Date(todoData.datetime!).toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "short", timeZone: "Asia/Shanghai" })
+                : new Date(todoData.datetime!).toLocaleString("zh-CN", { month: "numeric", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Shanghai" })
+              }
+            </span>
+            {todoData.end_datetime && !todoData.is_all_day && (
+              <span>— {new Date(todoData.end_datetime).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Shanghai" })}</span>
             )}
           </div>
-          {calendarData.location && (
+          {todoData.location && (
             <div className="flex items-center gap-2">
               <span className="text-base">📍</span>
-              <span>{calendarData.location}</span>
+              <span>{todoData.location}</span>
             </div>
           )}
-          {calendarData.notes && (
+          {todoData.notes && (
             <div className="flex items-center gap-2">
               <span className="text-base">📝</span>
-              <span>{calendarData.notes}</span>
+              <span>{todoData.notes}</span>
             </div>
           )}
         </div>
       )}
 
-      {/* 代办事项详情 */}
-      {todoData && todoData.due_date && (
+      {/* 提醒型代办详情 */}
+      {isReminder && todoData?.deadline && (
         <div className="mt-3 flex items-center gap-2 text-sm text-[var(--muted)]">
           <span className="text-base">📆</span>
-          <span>截止：{new Date(todoData.due_date).toLocaleDateString("zh-CN", { month: "long", day: "numeric" })}</span>
+          <span>截止：{new Date(todoData.deadline).toLocaleDateString("zh-CN", { month: "long", day: "numeric" })}</span>
         </div>
       )}
 
@@ -170,14 +156,10 @@ function MemoCard({ memo }: { memo: Memo }) {
       <div className="mt-4 flex items-center justify-between text-sm text-[var(--muted)]">
         <time>{formatTime(memo.created_at)}</time>
         {memo.intent === "movie" && (
-          <span className="px-2 py-0.5 rounded-full bg-[var(--accent-light)] text-xs">
-            电影
-          </span>
+          <span className="px-2 py-0.5 rounded-full bg-[var(--accent-light)] text-xs">电影</span>
         )}
         {memo.intent === "place" && (
-          <span className="px-2 py-0.5 rounded-full bg-[var(--accent-light)] text-xs">
-            地点
-          </span>
+          <span className="px-2 py-0.5 rounded-full bg-[var(--accent-light)] text-xs">地点</span>
         )}
       </div>
     </article>

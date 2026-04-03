@@ -39,6 +39,8 @@
 
 ### 捷径步骤结构（完整流程）
 
+路由逻辑：`intent` 字段是内容类型（`todo` / `memo`），具体走日历还是提醒，看 `intent_data` 里有没有 `datetime` 字段。
+
 ```
 [录制音频]
     ↓
@@ -47,19 +49,18 @@
     ↓
 [获取词典值]  "data" from 获取 URL 内容
     ↓
-[获取词典值]  "intent" from 上一步
-    ↓
-[如果] intent = "calendar"
-    └── [在日历中添加新事件]  （见下方参数说明）
-[否则，如果] intent = "todo"
-    └── [添加新提醒事项]  （见下方参数说明）
+[如果] data.intent = "todo"
+    ├── [如果] data.intent_data.datetime 存在（有具体时间）
+    │       └── [在日历中添加新事件]  → Voice2Do 日历
+    └── [否则]（纯代办，无具体时间）
+            └── [添加新提醒事项]  → Voice2Do 提醒列表
 ```
 
 ---
 
 ### 日历事件参数配置
 
-当 `intent = "calendar"` 时，从 `data.intent_data` 中读取：
+当 `intent = "todo"` 且 `intent_data.datetime` 存在时：
 
 | 捷径字段 | 读取路径 | 说明 |
 |---------|---------|------|
@@ -77,13 +78,13 @@
 
 ### 提醒事项参数配置
 
-当 `intent = "todo"` 时，从 `data.intent_data` 中读取：
+当 `intent = "todo"` 且 `intent_data.datetime` 不存在时：
 
 | 捷径字段 | 读取路径 | 说明 |
 |---------|---------|------|
 | 标题 | `data.intent_data.title` | 提醒事项名称 |
 | 备注 | `data.intent_data.notes` | 可选 |
-| 截止日期 | `data.intent_data.due_date` | 可选，YYYY-MM-DD 格式 |
+| 截止日期 | `data.intent_data.deadline` | 可选，YYYY-MM-DD 格式 |
 | **列表** | Voice2Do | **必须选择「Voice2Do」共享列表** |
 
 > **关键**：「列表」字段固定选择「Voice2Do」，这样才能两边 iPhone 同步。
@@ -94,29 +95,32 @@
 
 捷径需要处理的 JSON 结构：
 
-### 日历事件响应示例
+### 时间型待办响应示例（→ iPhone 日历）
+
+`intent_data.datetime` 存在时，捷径创建日历事件。
 
 ```json
 {
   "success": true,
   "data": {
     "id": "uuid",
-    "intent": "calendar",
+    "intent": "todo",
     "cleaned_text": "明天下午两点和小李开会，在星巴克",
     "intent_data": {
       "title": "和小李开会",
       "datetime": "2026-04-04T14:00:00+08:00",
       "end_datetime": "2026-04-04T15:00:00+08:00",
       "location": "星巴克",
-      "is_all_day": false,
-      "notes": ""
+      "is_all_day": false
     },
     "created_at": "2026-04-03T10:30:00Z"
   }
 }
 ```
 
-### 代办事项响应示例
+### 纯代办响应示例（→ iPhone 提醒）
+
+`intent_data.datetime` 不存在时，捷径创建提醒事项。
 
 ```json
 {
