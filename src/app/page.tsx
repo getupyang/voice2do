@@ -1,5 +1,6 @@
 import { Memo, TimelineGroup } from "@/types";
-import { groupMemosByTime, formatTime } from "@/lib/utils";
+import { groupMemosByTime } from "@/lib/utils";
+import { MemoCard } from "@/components/MemoCard";
 
 async function getMemos(): Promise<Memo[]> {
   const baseUrl = process.env.VERCEL_URL
@@ -84,18 +85,3 @@ function Timeline({ groups }: { groups: TimelineGroup[] }) {
   );
 }
 
-function MemoCard({ memo }: { memo: Memo }) {
-  return (
-    <article className="memo-card">
-      <p className="text-lg leading-relaxed">{memo.cleaned_text}</p>
-      <div className="mt-4 flex items-center justify-between text-sm text-[var(--muted)]">
-        <time>{formatTime(memo.created_at)}</time>
-        {memo.intent !== "memo" && (
-          <span className="px-2 py-0.5 rounded-full bg-[var(--accent-light)] text-xs">
-            {memo.intent}
-          </span>
-        )}
-      </div>
-    </article>
-  );
-}

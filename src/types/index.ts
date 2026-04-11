@@ -8,7 +8,8 @@ export interface Memo {
   intent_data: Record<string, unknown> | null;
   user_id: string | null;
   device_id: string | null;
-  status: 'active' | 'done' | 'archived';
+  status: 'active' | 'done' | 'archived' | 'pending' | 'error';
+  audio_url: string | null;
 }
 
 // 创建备忘的输入类型

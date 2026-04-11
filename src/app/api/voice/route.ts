@@ -101,6 +101,7 @@ export async function POST(request: NextRequest) {
         cleaned_text: "[转写中...]",
         intent: "memo",
         status: "pending",
+        audio_url: audioUrl,
       })
       .select()
       .single();
@@ -180,6 +181,7 @@ export async function POST(request: NextRequest) {
         id: updatedMemo.id,
         raw_text: updatedMemo.raw_text,
         cleaned_text: updatedMemo.cleaned_text,
+        audio_url: audioUrl,
         created_at: updatedMemo.created_at,
       },
     });
