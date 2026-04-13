@@ -65,7 +65,7 @@ function ErrorCard({ memo }: { memo: Memo }) {
   );
 }
 
-function AudioPlayer({ url }: { url: string }) {
+export function AudioPlayer({ url }: { url: string }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);

@@ -27,7 +27,9 @@ function buildAuthUrl(): string {
   const authorizationOrigin = `api_key="${API_KEY}", algorithm="hmac-sha256", headers="host date request-line", signature="${signature}"`;
   const authorization = Buffer.from(authorizationOrigin).toString("base64");
 
-  return `${BASE_URL}?authorization=${encodeURIComponent(authorization)}&date=${encodeURIComponent(date)}&host=${encodeURIComponent(HOST)}`;
+  const finalUrl = `${BASE_URL}?authorization=${encodeURIComponent(authorization)}&date=${encodeURIComponent(date)}&host=${encodeURIComponent(HOST)}`;
+  console.log("iFlytek auth - APPID:", APPID, "API_KEY:", API_KEY.substring(0, 6) + "...", "API_SECRET:", API_SECRET.substring(0, 6) + "...");
+  return finalUrl;
 }
 
 interface IflytekWord {
@@ -115,11 +117,16 @@ export async function transcribeWithIflytek(
 
     ws.on("error", (err) => {
       clearTimeout(timeout);
-      reject(new Error(`讯飞 WebSocket 错误: ${err.message}`));
+      const errDetail = err ? `${err.message || err.toString()} | ${JSON.stringify(err)}` : "unknown";
+      reject(new Error(`讯飞 WebSocket 错误: ${errDetail}`));
     });
 
-    ws.on("close", () => {
+    ws.on("close", (code, reason) => {
       clearTimeout(timeout);
+      // 如果非正常关闭且还没 resolve/reject
+      if (code !== 1000 && resultMap.size === 0) {
+        reject(new Error(`讯飞 WebSocket 关闭: code=${code}, reason=${reason?.toString()}`));
+      }
     });
   });
 }

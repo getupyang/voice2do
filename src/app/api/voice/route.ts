@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { transcribeWithIflytek } from "@/lib/iflytek";
-import { extractAudio, pcmToWav } from "@/lib/audio";
+import { extractRawAudio, extractPcm, pcmToWav } from "@/lib/audio";
 import { supabase } from "@/lib/supabase";
+import { enhanceMemo } from "@/lib/enhance";
 
 export async function POST(request: NextRequest) {
   let memoId: string | null = null;
@@ -15,9 +17,18 @@ export async function POST(request: NextRequest) {
 
     console.log("Received request with content-type:", contentType);
 
+    // 设备名称，优先从表单读取（支持中文），其次从请求头读取
+    let deviceName: string | null = null;
+
     if (contentType.includes("multipart/form-data")) {
       // 处理 form-data 格式（iOS 捷径）
       const formData = await request.formData();
+
+      // 从表单读取设备名称
+      const formDeviceName = formData.get("device_name");
+      if (formDeviceName && typeof formDeviceName === "string") {
+        deviceName = formDeviceName;
+      }
 
       // 记录所有字段用于调试
       const fields: string[] = [];
@@ -61,9 +72,20 @@ export async function POST(request: NextRequest) {
         mimeType = "audio/m4a";
       }
       fileName = `audio_${Date.now()}.m4a`;
+
+      // 非表单请求时，从请求头读取设备名称（支持 URL 编码）
+      const rawDeviceName = request.headers.get("device_name") || request.headers.get("device-name") || null;
+      if (rawDeviceName) {
+        try {
+          deviceName = decodeURIComponent(rawDeviceName);
+        } catch {
+          deviceName = rawDeviceName;
+        }
+      }
     }
 
     console.log("Audio buffer size:", audioBuffer.length, "bytes");
+    console.log("Device name:", deviceName);
 
     if (audioBuffer.length === 0) {
       return NextResponse.json(
@@ -72,12 +94,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 2: 提取 PCM 和音频元信息（采样率、声道数等）
+    // Step 2: 提取原始音频数据（保留原始采样率，用于生成播放用 WAV）
     console.log("Extracting audio data...");
-    let audioData: Awaited<ReturnType<typeof extractAudio>>;
+    let rawAudio: ReturnType<typeof extractRawAudio>;
     try {
-      audioData = extractAudio(audioBuffer);
-      console.log(`Audio: ${audioData.sampleRate}Hz, ${audioData.channels}ch, ${audioData.bitsPerSample}bit, PCM ${audioData.pcm.length} bytes`);
+      rawAudio = extractRawAudio(audioBuffer);
+      console.log(`Audio: ${rawAudio.sampleRate}Hz, ${rawAudio.channels}ch, ${rawAudio.bitsPerSample}bit, PCM ${rawAudio.pcm.length} bytes`);
     } catch (extractError) {
       console.error("Audio extraction failed:", extractError);
       return NextResponse.json(
@@ -86,8 +108,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 3: 生成 WAV 并上传到 Supabase Storage（用实际采样率，浏览器可播放）
-    const wavBuffer = pcmToWav(audioData);
+    // Step 3: 生成 WAV 并上传到 Supabase Storage（用原始采样率，浏览器可播放）
+    const wavBuffer = pcmToWav(rawAudio);
     const wavFileName = `uploads/${Date.now()}_${fileName.replace(/\.\w+$/, "")}.wav`;
     const { error: uploadError } = await supabase.storage
       .from("audio")
@@ -116,6 +138,7 @@ export async function POST(request: NextRequest) {
         intent: "memo",
         status: "pending",
         audio_url: audioUrl,
+        device_id: deviceName,
       })
       .select()
       .single();
@@ -136,8 +159,10 @@ export async function POST(request: NextRequest) {
     let cleanedText: string;
 
     try {
+      console.log("Resampling to 16kHz for transcription...");
+      const pcm16k = extractPcm(audioBuffer);
       console.log("Calling iFlytek transcription...");
-      rawText = await transcribeWithIflytek(audioData.pcm);
+      rawText = await transcribeWithIflytek(pcm16k);
       cleanedText = rawText;
       console.log("Transcription result:", rawText.substring(0, 50));
     } catch (transcribeError) {
@@ -182,6 +207,13 @@ export async function POST(request: NextRequest) {
         { success: false, error: "数据库更新失败" },
         { status: 500 }
       );
+    }
+
+    // 异步调用 LLM 增强（不阻塞响应）
+    if (process.env.OPENROUTER_API_KEY) {
+      after(async () => {
+        await enhanceMemo(memoId!, rawText);
+      });
     }
 
     return NextResponse.json({

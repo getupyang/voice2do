@@ -36,7 +36,17 @@ export function cleanTranscription(text: string): string {
 }
 
 /**
- * 将备忘按时间分组
+ * 获取 Asia/Shanghai 时区的日期部分
+ */
+function toShanghaiDate(date: Date): { year: number; month: number; day: number; dateStr: string } {
+  const formatted = date.toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
+  // sv-SE locale 输出格式为 YYYY-MM-DD
+  const [year, month, day] = formatted.split('-').map(Number);
+  return { year, month, day, dateStr: formatted };
+}
+
+/**
+ * 将备忘按时间分组（统一使用 Asia/Shanghai 时区）
  * - 近1月：按天
  * - 1月-1年：按月
  * - 超1年：按年
@@ -46,10 +56,12 @@ export function groupMemosByTime(memos: Memo[]): TimelineGroup[] {
   const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
 
+  const nowSh = toShanghaiDate(now);
   const groups: Map<string, TimelineGroup> = new Map();
 
   for (const memo of memos) {
     const date = new Date(memo.created_at);
+    const dateSh = toShanghaiDate(date);
     let key: string;
     let label: string;
     let type: 'day' | 'month' | 'year';
@@ -57,28 +69,34 @@ export function groupMemosByTime(memos: Memo[]): TimelineGroup[] {
     if (date >= oneMonthAgo) {
       // 近1月：按天分组
       type = 'day';
-      const dayDiff = Math.floor((now.getTime() - date.getTime()) / (24 * 60 * 60 * 1000));
 
-      if (dayDiff === 0) {
+      if (dateSh.dateStr === nowSh.dateStr) {
         key = 'today';
         label = '今天';
-      } else if (dayDiff === 1) {
-        key = 'yesterday';
-        label = '昨天';
       } else {
-        key = `day-${date.toISOString().split('T')[0]}`;
-        label = `${date.getMonth() + 1}月${date.getDate()}日`;
+        // 计算与今天相差的天数
+        const nowDayStart = new Date(`${nowSh.dateStr}T00:00:00+08:00`).getTime();
+        const dateDayStart = new Date(`${dateSh.dateStr}T00:00:00+08:00`).getTime();
+        const dayDiff = Math.round((nowDayStart - dateDayStart) / (24 * 60 * 60 * 1000));
+
+        if (dayDiff === 1) {
+          key = 'yesterday';
+          label = '昨天';
+        } else {
+          key = `day-${dateSh.dateStr}`;
+          label = `${dateSh.month}月${dateSh.day}日`;
+        }
       }
     } else if (date >= oneYearAgo) {
       // 1月-1年：按月分组
       type = 'month';
-      key = `month-${date.getFullYear()}-${date.getMonth()}`;
-      label = `${date.getFullYear()}年${date.getMonth() + 1}月`;
+      key = `month-${dateSh.year}-${dateSh.month}`;
+      label = `${dateSh.year}年${dateSh.month}月`;
     } else {
       // 超1年：按年分组
       type = 'year';
-      key = `year-${date.getFullYear()}`;
-      label = `${date.getFullYear()}年`;
+      key = `year-${dateSh.year}`;
+      label = `${dateSh.year}年`;
     }
 
     if (!groups.has(key)) {
@@ -96,7 +114,10 @@ export function groupMemosByTime(memos: Memo[]): TimelineGroup[] {
  */
 export function formatTime(dateString: string): string {
   const date = new Date(dateString);
-  const hours = date.getHours().toString().padStart(2, '0');
-  const minutes = date.getMinutes().toString().padStart(2, '0');
-  return `${hours}:${minutes}`;
+  return date.toLocaleTimeString('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
 }
