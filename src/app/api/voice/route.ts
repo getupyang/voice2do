@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { transcribeWithIflytek } from "@/lib/iflytek";
-import { extractPcm } from "@/lib/audio";
+import { extractAudio, pcmToWav } from "@/lib/audio";
 import { supabase } from "@/lib/supabase";
 
 export async function POST(request: NextRequest) {
@@ -72,28 +72,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 2: 上传音频到 Supabase Storage
-    const filePath = `uploads/${Date.now()}_${fileName}`;
+    // Step 2: 提取 PCM 和音频元信息（采样率、声道数等）
+    console.log("Extracting audio data...");
+    let audioData: Awaited<ReturnType<typeof extractAudio>>;
+    try {
+      audioData = extractAudio(audioBuffer);
+      console.log(`Audio: ${audioData.sampleRate}Hz, ${audioData.channels}ch, ${audioData.bitsPerSample}bit, PCM ${audioData.pcm.length} bytes`);
+    } catch (extractError) {
+      console.error("Audio extraction failed:", extractError);
+      return NextResponse.json(
+        { success: false, error: "音频格式不支持: " + (extractError instanceof Error ? extractError.message : "未知错误") },
+        { status: 400 }
+      );
+    }
+
+    // Step 3: 生成 WAV 并上传到 Supabase Storage（用实际采样率，浏览器可播放）
+    const wavBuffer = pcmToWav(audioData);
+    const wavFileName = `uploads/${Date.now()}_${fileName.replace(/\.\w+$/, "")}.wav`;
     const { error: uploadError } = await supabase.storage
       .from("audio")
-      .upload(filePath, audioBuffer, {
-        contentType: mimeType,
+      .upload(wavFileName, wavBuffer, {
+        contentType: "audio/wav",
         upsert: false,
       });
 
     let audioUrl: string | null = null;
     if (uploadError) {
-      // Storage 上传失败不阻断流程，只记录警告
       console.warn("Storage upload failed:", uploadError.message);
     } else {
       const { data: urlData } = supabase.storage
         .from("audio")
-        .getPublicUrl(filePath);
+        .getPublicUrl(wavFileName);
       audioUrl = urlData.publicUrl;
-      console.log("Audio uploaded to:", audioUrl);
+      console.log("WAV uploaded to:", audioUrl);
     }
 
-    // Step 3: 先创建数据库记录（状态为 pending）
+    // Step 4: 创建数据库记录（状态为 pending）
     const { data: memoData, error: insertError } = await supabase
       .from("memos")
       .insert({
@@ -117,21 +131,16 @@ export async function POST(request: NextRequest) {
     memoId = memoData.id;
     console.log("Created memo with id:", memoId);
 
-    // Step 4: 转换音频为 PCM 并调用讯飞转写
+    // Step 5: 调用讯飞转写
     let rawText: string;
     let cleanedText: string;
 
     try {
-      console.log("Extracting PCM from audio...");
-      const pcmBuffer = extractPcm(audioBuffer);
-      console.log("PCM buffer size:", pcmBuffer.length, "bytes");
-
       console.log("Calling iFlytek transcription...");
-      rawText = await transcribeWithIflytek(pcmBuffer);
+      rawText = await transcribeWithIflytek(audioData.pcm);
       cleanedText = rawText;
       console.log("Transcription result:", rawText.substring(0, 50));
     } catch (transcribeError) {
-      // 转写失败，更新记录状态为 error
       console.error("Transcription failed:", transcribeError);
 
       await supabase
@@ -155,7 +164,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Step 5: 更新数据库记录
+    // Step 6: 更新数据库记录
     const { data: updatedMemo, error: updateError } = await supabase
       .from("memos")
       .update({
