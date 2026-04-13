@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- 背景：圆角矩形，暖米色 -->
+  <rect width="512" height="512" rx="112" ry="112" fill="#FFFBF5"/>
+
+  <!-- 外圈装饰：柔和的暖色圆环 -->
+  <circle cx="256" cy="240" r="140" fill="none" stroke="#F5E6D3" stroke-width="3"/>
+
+  <!-- 麦克风主体 -->
+  <rect x="224" y="140" width="64" height="120" rx="32" ry="32" fill="#D4A574"/>
+
+  <!-- 麦克风横纹装饰 -->
+  <line x1="236" y1="180" x2="276" y2="180" stroke="#FFFBF5" stroke-width="2.5" stroke-linecap="round" opacity="0.6"/>
+  <line x1="236" y1="200" x2="276" y2="200" stroke="#FFFBF5" stroke-width="2.5" stroke-linecap="round" opacity="0.6"/>
+  <line x1="236" y1="220" x2="276" y2="220" stroke="#FFFBF5" stroke-width="2.5" stroke-linecap="round" opacity="0.6"/>
+
+  <!-- 麦克风支架弧线 -->
+  <path d="M200 230 Q200 300 256 300 Q312 300 312 230" fill="none" stroke="#D4A574" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- 麦克风支架竖线 -->
+  <line x1="256" y1="300" x2="256" y2="340" stroke="#D4A574" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- 麦克风底座 -->
+  <line x1="224" y1="340" x2="288" y2="340" stroke="#D4A574" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- 声波（左） -->
+  <path d="M180 190 Q168 215 180 240" fill="none" stroke="#D4A574" stroke-width="5" stroke-linecap="round" opacity="0.4"/>
+  <path d="M160 175 Q142 215 160 255" fill="none" stroke="#D4A574" stroke-width="4" stroke-linecap="round" opacity="0.25"/>
+
+  <!-- 声波（右） -->
+  <path d="M332 190 Q344 215 332 240" fill="none" stroke="#D4A574" stroke-width="5" stroke-linecap="round" opacity="0.4"/>
+  <path d="M352 175 Q370 215 352 255" fill="none" stroke="#D4A574" stroke-width="4" stroke-linecap="round" opacity="0.25"/>
+
+  <!-- 文字 Voice2Do -->
+  <text x="256" y="405" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="48" font-weight="bold" fill="#2D2D2D" letter-spacing="2">Voice2Do</text>
+</svg>
