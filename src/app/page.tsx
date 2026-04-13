@@ -1,32 +1,6 @@
-import { Memo } from "@/types";
-import MemoList from "@/components/MemoList";
+import MemoListLoader from "@/components/MemoListLoader";
 
-async function getMemos(): Promise<Memo[]> {
-  const baseUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : "http://localhost:3000";
-
-  try {
-    const res = await fetch(`${baseUrl}/api/memos`, {
-      cache: "no-store",
-    });
-
-    if (!res.ok) {
-      console.error("Failed to fetch memos:", res.status);
-      return [];
-    }
-
-    const json = await res.json();
-    return json.data || [];
-  } catch (error) {
-    console.error("Error fetching memos:", error);
-    return [];
-  }
-}
-
-export default async function Home() {
-  const memos = await getMemos();
-
+export default function Home() {
   return (
     <div className="min-h-screen">
       {/* 页头 */}
@@ -39,24 +13,8 @@ export default async function Home() {
 
       {/* 主内容 */}
       <main className="max-w-2xl mx-auto px-6 py-8">
-        {memos.length === 0 ? (
-          <EmptyState />
-        ) : (
-          <MemoList memos={memos} />
-        )}
+        <MemoListLoader />
       </main>
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 text-center">
-      <div className="text-6xl mb-6">🎙️</div>
-      <h2 className="text-xl font-medium mb-2">还没有任何记录</h2>
-      <p className="text-[var(--muted)] max-w-sm">
-        使用 iOS 捷径录制一段语音，你的想法就会出现在这里
-      </p>
     </div>
   );
 }
