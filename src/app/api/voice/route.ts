@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
 import { transcribeWithIflytek } from "@/lib/iflytek";
-import { extractRawAudio, extractPcm, pcmToWav } from "@/lib/audio";
+import { extractRawAudio, pcmToWav } from "@/lib/audio";
 import { supabase } from "@/lib/supabase";
 import { enhanceMemo } from "@/lib/enhance";
 
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 2: 提取原始音频数据（保留原始采样率，用于生成播放用 WAV）
+    // Step 2: 一次性提取原始音频数据（PCM + 元信息）
     console.log("Extracting audio data...");
     let rawAudio: ReturnType<typeof extractRawAudio>;
     try {
@@ -108,28 +108,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 3: 生成 WAV 并上传到 Supabase Storage（用原始采样率，浏览器可播放）
-    const wavBuffer = pcmToWav(rawAudio);
-    const wavFileName = `uploads/${Date.now()}_${fileName.replace(/\.\w+$/, "")}.wav`;
-    const { error: uploadError } = await supabase.storage
-      .from("audio")
-      .upload(wavFileName, wavBuffer, {
-        contentType: "audio/wav",
-        upsert: false,
-      });
-
-    let audioUrl: string | null = null;
-    if (uploadError) {
-      console.warn("Storage upload failed:", uploadError.message);
-    } else {
-      const { data: urlData } = supabase.storage
-        .from("audio")
-        .getPublicUrl(wavFileName);
-      audioUrl = urlData.publicUrl;
-      console.log("WAV uploaded to:", audioUrl);
-    }
-
-    // Step 4: 创建数据库记录（状态为 pending）
+    // Step 3: 先创建 DB 记录（让 iOS 捷径尽快得到响应的前置条件）
     const { data: memoData, error: insertError } = await supabase
       .from("memos")
       .insert({
@@ -137,7 +116,6 @@ export async function POST(request: NextRequest) {
         cleaned_text: "[转写中...]",
         intent: "memo",
         status: "pending",
-        audio_url: audioUrl,
         device_id: deviceName,
       })
       .select()
@@ -154,19 +132,72 @@ export async function POST(request: NextRequest) {
     memoId = memoData.id;
     console.log("Created memo with id:", memoId);
 
-    // Step 5: 调用讯飞转写
+    // Step 4: WAV 上传和讯飞转写并行执行（两者互不依赖）
+    const wavBuffer = pcmToWav(rawAudio);
+    const wavFileName = `uploads/${Date.now()}_${fileName.replace(/\.\w+$/, "")}.wav`;
+
+    // 从已提取的原始 PCM 重采样到 16kHz mono（复用 rawAudio，不重新解析 AIFF）
+    let pcm16k = rawAudio.pcm;
+    if (rawAudio.channels > 1) {
+      // 立体声转单声道
+      const frameSize = rawAudio.channels * 2;
+      const frameCount = Math.floor(pcm16k.length / frameSize);
+      const mono = Buffer.alloc(frameCount * 2);
+      for (let i = 0; i < frameCount; i++) {
+        let sum = 0;
+        for (let ch = 0; ch < rawAudio.channels; ch++) {
+          sum += pcm16k.readInt16LE(i * frameSize + ch * 2);
+        }
+        mono.writeInt16LE(Math.round(sum / rawAudio.channels), i * 2);
+      }
+      pcm16k = mono;
+    }
+    if (rawAudio.sampleRate !== 16000) {
+      // 重采样到 16kHz
+      const srcSamples = pcm16k.length / 2;
+      const dstSamples = Math.round(srcSamples * 16000 / rawAudio.sampleRate);
+      const dst = Buffer.alloc(dstSamples * 2);
+      const ratio = rawAudio.sampleRate / 16000;
+      for (let i = 0; i < dstSamples; i++) {
+        const srcPos = i * ratio;
+        const srcIdx = Math.floor(srcPos);
+        const frac = srcPos - srcIdx;
+        const s0 = srcIdx < srcSamples ? pcm16k.readInt16LE(srcIdx * 2) : 0;
+        const s1 = srcIdx + 1 < srcSamples ? pcm16k.readInt16LE((srcIdx + 1) * 2) : s0;
+        dst.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(s0 + (s1 - s0) * frac))), i * 2);
+      }
+      pcm16k = dst;
+    }
+    console.log(`Resampled PCM: ${pcm16k.length} bytes, duration=${(pcm16k.length / 2 / 16000).toFixed(1)}s`);
+
+    // 并行：上传 WAV + 讯飞转写
+    const [uploadResult, transcribeResult] = await Promise.allSettled([
+      supabase.storage.from("audio").upload(wavFileName, wavBuffer, {
+        contentType: "audio/wav",
+        upsert: false,
+      }),
+      transcribeWithIflytek(pcm16k),
+    ]);
+
+    // 处理上传结果
+    let audioUrl: string | null = null;
+    if (uploadResult.status === "fulfilled" && !uploadResult.value.error) {
+      const { data: urlData } = supabase.storage.from("audio").getPublicUrl(wavFileName);
+      audioUrl = urlData.publicUrl;
+      console.log("WAV uploaded to:", audioUrl);
+    } else {
+      const reason = uploadResult.status === "rejected"
+        ? uploadResult.reason
+        : uploadResult.value.error?.message;
+      console.warn("Storage upload failed:", reason);
+    }
+
+    // 处理转写结果
     let rawText: string;
     let cleanedText: string;
 
-    try {
-      console.log("Resampling to 16kHz for transcription...");
-      const pcm16k = extractPcm(audioBuffer);
-      console.log("Calling iFlytek transcription...");
-      rawText = await transcribeWithIflytek(pcm16k);
-      cleanedText = rawText;
-      console.log("Transcription result:", rawText.substring(0, 50));
-    } catch (transcribeError) {
-      console.error("Transcription failed:", transcribeError);
+    if (transcribeResult.status === "rejected") {
+      console.error("Transcription failed:", transcribeResult.reason);
 
       await supabase
         .from("memos")
@@ -174,28 +205,30 @@ export async function POST(request: NextRequest) {
           raw_text: "[转写失败]",
           cleaned_text: "[转写失败]",
           status: "error",
+          audio_url: audioUrl,
         })
         .eq("id", memoId);
 
       return NextResponse.json({
         success: false,
-        error:
-          "语音转写失败: " +
-          (transcribeError instanceof Error
-            ? transcribeError.message
-            : "未知错误"),
+        error: "语音转写失败: " + (transcribeResult.reason?.message || "未知错误"),
         memo_id: memoId,
         audio_uploaded: !!audioUrl,
       });
     }
 
-    // Step 6: 更新数据库记录
+    rawText = transcribeResult.value;
+    cleanedText = rawText;
+    console.log("Transcription result:", rawText.substring(0, 50));
+
+    // Step 5: 更新数据库记录
     const { data: updatedMemo, error: updateError } = await supabase
       .from("memos")
       .update({
         raw_text: rawText,
         cleaned_text: cleanedText,
         status: "active",
+        audio_url: audioUrl,
       })
       .eq("id", memoId)
       .select()
