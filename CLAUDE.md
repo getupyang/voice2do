@@ -20,6 +20,8 @@
 Voice2Do 是一个语音备忘录应用：
 - 用户通过 iOS 捷径录制语音，上传到后端
 - 后端用讯飞 API 转写语音为文字
+- LLM 自动识别意图 + 判断是否需要日历提醒
+- 需要提醒的事件自动通过 CalDAV 写入 iCloud 日历（Voice2Do 日历）
 - 前端以时间轴方式展示所有备忘
 
 ## 技术栈
@@ -68,6 +70,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=xxx
 IFLYTEK_APPID=xxx
 IFLYTEK_API_KEY=xxx
 IFLYTEK_API_SECRET=xxx
+OPENROUTER_API_KEY=xxx
+ICLOUD_EMAIL=xxx          # Apple ID，用于 CalDAV 日历写入
+ICLOUD_APP_PASSWORD=xxx   # Apple App 专用密码
 ```
 
 ## 数据库表
@@ -84,6 +89,9 @@ IFLYTEK_API_SECRET=xxx
 | user_id | uuid | 用户ID（预留） |
 | device_id | text | 设备标识（预留） |
 | status | text | 状态 (active/done/archived) |
+| audio_url | text | 音频文件 URL |
+| calendar_event | jsonb | 日历事件数据（LLM 提取） |
+| calendar_synced | boolean | 是否已同步到 iCloud 日历 |
 
 ## 编码规范
 
@@ -106,7 +114,8 @@ IFLYTEK_API_SECRET=xxx
 ## 版本计划
 
 - **v0.1**: 语音上传 + 时间轴展示（纯 memo）
-- **v0.2**: 意图识别 + 电影分类
+- **v0.2**: 意图识别 + 电影/地点/todo 分类
+- **v0.3**: Apple Calendar 自动同步（CalDAV + iCloud）
 
 ## 常用命令
 
