@@ -121,10 +121,16 @@ export async function createCalendarEvent(
     icalEvent.description(event.notes);
   }
 
-  // 添加 30 分钟前提醒
+  // 提前 1 天提醒
   icalEvent.createAlarm({
     type: ICalAlarmType.display,
-    triggerBefore: 30 * 60, // 30 minutes before in seconds
+    triggerBefore: 24 * 60 * 60, // 1 day before in seconds
+  });
+
+  // 当天提前 2 小时提醒
+  icalEvent.createAlarm({
+    type: ICalAlarmType.display,
+    triggerBefore: 2 * 60 * 60, // 2 hours before in seconds
   });
 
   const icsString = calendar.toString();
