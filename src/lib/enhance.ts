@@ -198,6 +198,7 @@ export async function enhanceMemo(
     // 如果有日历事件，同步到 iCloud
     if (result.calendar_event) {
       try {
+        console.log(`[enhance] Attempting calendar sync for memo ${memoId}:`, JSON.stringify(result.calendar_event));
         const { createCalendarEvent } = await import("./caldav");
         await createCalendarEvent(result.calendar_event, memoId);
 
@@ -209,8 +210,8 @@ export async function enhanceMemo(
 
         console.log(`[enhance] Calendar event synced for memo ${memoId}: "${result.calendar_event.title}"`);
       } catch (calError) {
-        console.error(`[enhance] Calendar sync failed for memo ${memoId}:`, calError);
-        // 日历同步失败不影响 memo 本身，calendar_synced 保持 false
+        console.error(`[enhance] Calendar sync failed for memo ${memoId}:`, calError instanceof Error ? calError.message : calError);
+        console.error(`[enhance] Calendar sync error stack:`, calError instanceof Error ? calError.stack : 'no stack');
       }
     }
   } catch (error) {
