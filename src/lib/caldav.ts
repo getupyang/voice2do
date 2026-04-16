@@ -93,12 +93,20 @@ export async function createCalendarEvent(
   const startDate = new Date(event.start_time);
   let endDate: Date;
 
-  if (event.end_time) {
+  if (event.all_day) {
+    if (event.end_time) {
+      // 全天事件的 iCalendar DTEND 是"不包含当天"，需要 +1 天
+      // 例：覆盖 4/21-4/22 → DTEND 应为 4/23
+      endDate = new Date(event.end_time);
+      endDate.setHours(0, 0, 0, 0);
+      endDate.setDate(endDate.getDate() + 1);
+    } else {
+      // 单日全天事件：结束日期 = 开始日期 + 1 天
+      endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + 1);
+    }
+  } else if (event.end_time) {
     endDate = new Date(event.end_time);
-  } else if (event.all_day) {
-    // 全天事件：结束日期 = 开始日期 + 1 天
-    endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + 1);
   } else {
     // 非全天事件默认 1 小时
     endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
