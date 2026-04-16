@@ -6,7 +6,15 @@
 import { chatCompletion } from "./llm";
 import { supabase } from "./supabase";
 
-const SYSTEM_PROMPT = `你是一个语音备忘录的后处理助手。用户通过语音录入了一段话，经过语音转文字后得到了下面的文本。请你完成以下任务：
+function buildSystemPrompt(): string {
+  // 注入当前时间，让 LLM 能解析相对日期（"下周三"、"这周五"等）
+  const now = new Date();
+  const currentDatetime = now.toISOString().slice(0, 19);
+  const weekday = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][now.getDay()];
+
+  return `你是一个语音备忘录的后处理助手。用户通过语音录入了一段话，经过语音转文字后得到了下面的文本。请你完成以下任务：
+
+当前时间：${currentDatetime}（${weekday}）
 
 ## 任务
 
@@ -43,25 +51,66 @@ const SYSTEM_PROMPT = `你是一个语音备忘录的后处理助手。用户通
 - todo: 提取事项描述
 - memo: 不需要提取，设为 null
 
+### 4. 日历事件判断
+判断这条语音备忘录是否需要添加到日历提醒。这个判断独立于意图分类——任何意图类型都可能需要或不需要加日历。
+
+**需要加日历的情况**（有明确时间 + 怕忘/不能错过）：
+- 约了医生、牙科等预约："周三下午两点看牙医" → 需要
+- 报名了活动/会议："5月10号参加 AI 大会" → 需要
+- 电影上映日："哥斯拉大战金刚4月25号上映要去看" → 需要
+- 航班/火车："下周五飞上海的航班" → 需要
+- 有截止日期的事项："下周一之前交报告" → 需要
+- 和人的约定："周六晚上和小明吃饭" → 需要
+
+**不需要加日历的情况**：
+- 只是"以后想做"，没有具体时间："想去安岳看石窟"、"想学吉他" → 不需要
+- 日常记录、想法、感受 → 不需要
+- 描述过去已发生的事 → 不需要
+- 泛泛的时间没有具体日期："最近要运动" → 不需要
+
+如果需要加日历，提取以下信息：
+- title: 事件标题（简洁明了）
+- start_time: 开始时间（ISO 8601 格式，基于当前时间推算相对日期）
+- end_time: 结束时间（可选，没提到就不填）
+- all_day: 是否全天事件（如果只提到日期没提到时间，设为 true）
+- location: 地点（可选，只在明确提到时填写）
+- notes: 备注（可选，从原文提取有用的补充信息）
+
 ## 输出格式
 严格按以下 JSON 格式输出，不要输出任何其他内容：
 
 {
   "cleaned_text": "优化后的文本",
   "intent": "movie 或 place 或 todo 或 memo",
-  "intent_data": null
+  "intent_data": null,
+  "calendar_event": null
 }
 
 intent_data 示例：
 - movie: { "title": "电影名", "reason": "想看的原因" }
 - place: { "name": "地点名", "reason": "想去的原因" }
 - todo: { "task": "事项描述" }
-- memo: null`;
+- memo: null
+
+calendar_event 示例（需要加日历时）：
+{ "title": "牙科复诊", "start_time": "2026-04-18T14:00:00", "all_day": false, "location": "北京口腔医院" }
+{ "title": "AI 大会", "start_time": "2026-05-10T09:00:00", "all_day": true }
+
+不需要加日历时，calendar_event 设为 null。`;
+}
 
 interface EnhanceResult {
   cleaned_text: string;
   intent: "memo" | "movie" | "place" | "todo";
   intent_data: Record<string, unknown> | null;
+  calendar_event: {
+    title: string;
+    start_time: string;
+    end_time?: string;
+    all_day?: boolean;
+    location?: string;
+    notes?: string;
+  } | null;
 }
 
 /**
@@ -72,7 +121,7 @@ export async function enhanceTranscription(
 ): Promise<EnhanceResult> {
   const response = await chatCompletion(
     [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: buildSystemPrompt() },
       { role: "user", content: rawText },
     ],
     { jsonMode: true }
@@ -91,16 +140,23 @@ export async function enhanceTranscription(
     result.intent = "memo";
   }
 
+  // 校验 calendar_event 基本结构
+  let calendarEvent = null;
+  if (result.calendar_event && result.calendar_event.title && result.calendar_event.start_time) {
+    calendarEvent = result.calendar_event;
+  }
+
   return {
     cleaned_text: result.cleaned_text,
     intent: result.intent,
     intent_data: result.intent_data || null,
+    calendar_event: calendarEvent,
   };
 }
 
 /**
  * 异步增强 memo 记录
- * 在后台调用 LLM 处理，完成后更新数据库
+ * 在后台调用 LLM 处理，完成后更新数据库，如有日历事件则同步到 iCloud
  */
 export async function enhanceMemo(
   memoId: string,
@@ -112,21 +168,44 @@ export async function enhanceMemo(
     console.log(`[enhance] Result:`, {
       intent: result.intent,
       cleaned_text: result.cleaned_text.substring(0, 50),
+      has_calendar_event: !!result.calendar_event,
     });
 
+    // 更新数据库（含 calendar_event）
     const { error } = await supabase
       .from("memos")
       .update({
         cleaned_text: result.cleaned_text,
         intent: result.intent,
         intent_data: result.intent_data,
+        calendar_event: result.calendar_event,
       })
       .eq("id", memoId);
 
     if (error) {
       console.error(`[enhance] Database update failed for memo ${memoId}:`, error);
-    } else {
-      console.log(`[enhance] Successfully enhanced memo ${memoId}`);
+      return;
+    }
+
+    console.log(`[enhance] Successfully enhanced memo ${memoId}`);
+
+    // 如果有日历事件，同步到 iCloud
+    if (result.calendar_event) {
+      try {
+        const { createCalendarEvent } = await import("./caldav");
+        await createCalendarEvent(result.calendar_event, memoId);
+
+        // 标记同步成功
+        await supabase
+          .from("memos")
+          .update({ calendar_synced: true })
+          .eq("id", memoId);
+
+        console.log(`[enhance] Calendar event synced for memo ${memoId}: "${result.calendar_event.title}"`);
+      } catch (calError) {
+        console.error(`[enhance] Calendar sync failed for memo ${memoId}:`, calError);
+        // 日历同步失败不影响 memo 本身，calendar_synced 保持 false
+      }
     }
   } catch (error) {
     console.error(`[enhance] Enhancement failed for memo ${memoId}:`, error);
