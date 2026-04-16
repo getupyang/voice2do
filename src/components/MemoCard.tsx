@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Memo } from "@/types";
+import { Memo, CalendarEvent } from "@/types";
 import { formatTime } from "@/lib/utils";
 
 export function MemoCard({ memo }: { memo: Memo }) {
@@ -16,6 +16,9 @@ export function MemoCard({ memo }: { memo: Memo }) {
   return (
     <article className="memo-card">
       <p className="text-lg leading-relaxed">{memo.cleaned_text}</p>
+      {memo.calendar_event && (
+        <CalendarBadge event={memo.calendar_event} synced={memo.calendar_synced} />
+      )}
       {memo.audio_url && <AudioPlayer url={memo.audio_url} />}
       <div className="mt-4 flex items-center justify-between text-sm text-[var(--muted)]">
         <time>{formatTime(memo.created_at)}</time>
@@ -145,6 +148,44 @@ export function AudioPlayer({ url }: { url: string }) {
           ? `${formatDuration(currentTime)} / ${formatDuration(duration)}`
           : "--:--"}
       </span>
+    </div>
+  );
+}
+
+function CalendarBadge({ event, synced }: { event: CalendarEvent; synced: boolean }) {
+  const date = new Date(event.start_time);
+  const dateStr = event.all_day
+    ? date.toLocaleDateString("zh-CN", { month: "long", day: "numeric" })
+    : date.toLocaleDateString("zh-CN", {
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+  return (
+    <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50/60 text-sm">
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        className="flex-shrink-0 text-blue-500"
+      >
+        <rect x="2" y="3" width="12" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+        <path d="M2 6.5h12" stroke="currentColor" strokeWidth="1.2" />
+        <path d="M5.5 1.5v3M10.5 1.5v3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      </svg>
+      <span className="text-blue-700">{event.title}</span>
+      <span className="text-blue-400">{dateStr}</span>
+      {event.location && (
+        <span className="text-blue-400">@ {event.location}</span>
+      )}
+      {synced && (
+        <svg width="14" height="14" viewBox="0 0 14 14" className="flex-shrink-0 text-green-500 ml-auto">
+          <path d="M3 7l3 3 5-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </svg>
+      )}
     </div>
   );
 }
