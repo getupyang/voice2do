@@ -2,19 +2,22 @@
 
 import { useState } from "react";
 import { Memo, IntentType, INTENT_LABELS } from "@/types";
-import { groupMemosByTime, formatTime } from "@/lib/utils";
+import { groupMemosByTime } from "@/lib/utils";
 import { TimelineGroup } from "@/types";
-import { AudioPlayer } from "./MemoCard";
+import { MemoCard } from "./MemoCard";
 
-const FILTER_OPTIONS: { value: "all" | IntentType; label: string }[] = [
+type Filter = "all" | IntentType | "done";
+
+const FILTER_OPTIONS: { value: Filter; label: string }[] = [
   { value: "all", label: "全部" },
   { value: "movie", label: "电影" },
   { value: "place", label: "目的地" },
   { value: "todo", label: "要做的事" },
+  { value: "done", label: "已完成" },
 ];
 
 export default function MemoList({ memos }: { memos: Memo[] }) {
-  const [activeFilter, setActiveFilter] = useState<"all" | IntentType>("all");
+  const [activeFilter, setActiveFilter] = useState<Filter>("all");
 
   // 统计各分类数量
   const intentCounts = memos.reduce(
@@ -24,24 +27,33 @@ export default function MemoList({ memos }: { memos: Memo[] }) {
     },
     {} as Record<string, number>
   );
+  const doneCount = memos.filter((m) => m.status === "done").length;
 
-  // 只在有非 memo 分类时显示筛选栏
   const hasNonMemoIntents = Object.keys(intentCounts).some((k) => k !== "memo");
+  const showFilterBar = hasNonMemoIntents || doneCount > 0;
 
   const filteredMemos =
     activeFilter === "all"
       ? memos
+      : activeFilter === "done"
+      ? memos.filter((m) => m.status === "done")
       : memos.filter((m) => m.intent === activeFilter);
 
   const groups = groupMemosByTime(filteredMemos);
 
+  // 找最新一条可翻转的卡片，给它 showHint
+  const firstFlippableId = filteredMemos.find(
+    (m) => m.status === "active" || m.status === "done"
+  )?.id;
+
   return (
     <>
-      {hasNonMemoIntents && (
+      {showFilterBar && (
         <FilterBar
           activeFilter={activeFilter}
           onFilterChange={setActiveFilter}
           intentCounts={intentCounts}
+          doneCount={doneCount}
         />
       )}
 
@@ -50,11 +62,13 @@ export default function MemoList({ memos }: { memos: Memo[] }) {
           <p className="text-[var(--muted)]">
             {activeFilter === "all"
               ? "还没有任何记录"
-              : `还没有「${INTENT_LABELS[activeFilter]}」的记录`}
+              : activeFilter === "done"
+              ? "还没有已完成的记录"
+              : `还没有「${INTENT_LABELS[activeFilter as IntentType]}」的记录`}
           </p>
         </div>
       ) : (
-        <Timeline groups={groups} />
+        <Timeline groups={groups} hintTargetId={firstFlippableId} />
       )}
     </>
   );
@@ -64,19 +78,26 @@ function FilterBar({
   activeFilter,
   onFilterChange,
   intentCounts,
+  doneCount,
 }: {
-  activeFilter: "all" | IntentType;
-  onFilterChange: (filter: "all" | IntentType) => void;
+  activeFilter: Filter;
+  onFilterChange: (filter: Filter) => void;
   intentCounts: Record<string, number>;
+  doneCount: number;
 }) {
   return (
     <div className="flex gap-2 mb-8 flex-wrap">
       {FILTER_OPTIONS.map(({ value, label }) => {
         // 隐藏没有数据的分类（"全部"始终显示）
-        if (value !== "all" && !intentCounts[value]) return null;
+        if (value === "done") {
+          if (doneCount === 0) return null;
+        } else if (value !== "all" && !intentCounts[value]) {
+          return null;
+        }
 
         const isActive = activeFilter === value;
-        const count = value === "all" ? null : intentCounts[value];
+        const count =
+          value === "all" ? null : value === "done" ? doneCount : intentCounts[value];
 
         return (
           <button
@@ -95,7 +116,13 @@ function FilterBar({
   );
 }
 
-function Timeline({ groups }: { groups: TimelineGroup[] }) {
+function Timeline({
+  groups,
+  hintTargetId,
+}: {
+  groups: TimelineGroup[];
+  hintTargetId?: string;
+}) {
   return (
     <div className="space-y-8">
       {groups.map((group) => (
@@ -105,33 +132,15 @@ function Timeline({ groups }: { groups: TimelineGroup[] }) {
           </div>
           <div className="space-y-4">
             {group.memos.map((memo) => (
-              <MemoCard key={memo.id} memo={memo} />
+              <MemoCard
+                key={memo.id}
+                memo={memo}
+                showHint={memo.id === hintTargetId}
+              />
             ))}
           </div>
         </section>
       ))}
     </div>
-  );
-}
-
-function MemoCard({ memo }: { memo: Memo }) {
-  const intentLabel = INTENT_LABELS[memo.intent];
-
-  return (
-    <article className="memo-card">
-      <p className="text-lg leading-relaxed">{memo.cleaned_text}</p>
-      {memo.audio_url && <AudioPlayer url={memo.audio_url} />}
-      <div className="mt-4 flex items-center justify-between text-sm text-[var(--muted)]">
-        <span>
-          {formatTime(memo.created_at)}
-          {memo.device_id && <span> · {memo.device_id}</span>}
-        </span>
-        {memo.intent !== "memo" && (
-          <span className="intent-tag">
-            {intentLabel}
-          </span>
-        )}
-      </div>
-    </article>
   );
 }

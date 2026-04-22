@@ -193,9 +193,6 @@ export async function POST(request: NextRequest) {
     }
 
     // 处理转写结果
-    let rawText: string;
-    let cleanedText: string;
-
     if (transcribeResult.status === "rejected") {
       console.error("Transcription failed:", transcribeResult.reason);
 
@@ -217,8 +214,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    rawText = transcribeResult.value;
-    cleanedText = rawText;
+    const rawText = transcribeResult.value;
+    const cleanedText = rawText;
     console.log("Transcription result:", rawText.substring(0, 50));
 
     // Step 5: 更新数据库记录

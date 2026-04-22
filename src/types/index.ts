@@ -50,6 +50,7 @@ export interface Memo {
   device_id: string | null;
   status: 'active' | 'done' | 'archived' | 'pending' | 'error';
   audio_url: string | null;
+  completed_at: string | null;
 }
 
 // 创建备忘的输入类型

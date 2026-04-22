@@ -1,34 +1,150 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Memo, CalendarEvent } from "@/types";
 import { formatTime } from "@/lib/utils";
+import { CardBack } from "./CardBack";
 
-export function MemoCard({ memo }: { memo: Memo }) {
+const HINT_SEEN_KEY = "voice2do.flipHintSeen";
+
+function shouldShowHintInitially(showHint: boolean) {
+  if (!showHint) return false;
+  if (typeof window === "undefined") return false;
+  // ?resetHint 强制重放（测试用）
+  if (window.location.search.includes("resetHint")) {
+    localStorage.removeItem(HINT_SEEN_KEY);
+    return true;
+  }
+  return !localStorage.getItem(HINT_SEEN_KEY);
+}
+
+export function MemoCard({
+  memo: initialMemo,
+  showHint = false,
+}: {
+  memo: Memo;
+  showHint?: boolean;
+}) {
+  const [memo, setMemo] = useState(initialMemo);
+  const [flipped, setFlipped] = useState(false);
+  const [playHint, setPlayHint] = useState(() => shouldShowHintInitially(showHint));
+  // 正面右上角的绿勾：完成后翻回到一半时才淡入，避免用户看到"勾在翻转的卡片上穿帮"
+  const [showDoneDot, setShowDoneDot] = useState(initialMemo.status === "done");
+
+  useEffect(() => {
+    if (!playHint) return;
+    try {
+      localStorage.setItem(HINT_SEEN_KEY, "1");
+    } catch {}
+    // 半翻转动画 1200ms + 500ms 缓冲，避免用户误以为还在动
+    const timer = setTimeout(() => setPlayHint(false), 1700);
+    return () => clearTimeout(timer);
+  }, [playHint]);
+
   if (memo.status === "pending") {
     return <PendingCard memo={memo} />;
   }
-
   if (memo.status === "error") {
     return <ErrorCard memo={memo} />;
   }
 
+  const isDone = memo.status === "done";
+
+  function handleCardClick(e: React.MouseEvent) {
+    if (e.target !== e.currentTarget) {
+      const interactive = (e.target as HTMLElement).closest(
+        "button, a, input, textarea, audio, [data-no-flip]"
+      );
+      if (interactive) return;
+    }
+    setFlipped((f) => !f);
+  }
+
+  function handleCompleted(patch: Partial<Memo>) {
+    const nowDone = patch.status === "done";
+    setMemo((m) => ({ ...m, ...patch }));
+    // 翻回时隐藏勾，等翻到一半才显示
+    setShowDoneDot(false);
+    setFlipped(false);
+    if (nowDone) {
+      setTimeout(() => setShowDoneDot(true), 350);
+    }
+  }
+
   return (
-    <article className="memo-card">
-      <p className="text-lg leading-relaxed">{memo.cleaned_text}</p>
-      {memo.calendar_event && (
-        <CalendarBadge event={memo.calendar_event} synced={memo.calendar_synced} />
-      )}
-      {memo.audio_url && <AudioPlayer url={memo.audio_url} />}
-      <div className="mt-4 flex items-center justify-between text-sm text-[var(--muted)]">
-        <time>{formatTime(memo.created_at)}</time>
-        {memo.intent !== "memo" && (
-          <span className="px-2 py-0.5 rounded-full bg-[var(--accent-light)] text-xs">
-            {memo.intent}
-          </span>
-        )}
+    <div className="flip-scene">
+      <div
+        className={`flip-card ${flipped ? "is-flipped" : ""} ${
+          playHint && !flipped ? "hint-peek" : ""
+        }`}
+        onClick={handleCardClick}
+      >
+        {/* 正面 */}
+        <article
+          className={`flip-face memo-card relative cursor-pointer ${
+            isDone ? "is-done" : ""
+          }`}
+        >
+          <p className={`text-lg leading-relaxed ${isDone ? "opacity-60" : ""}`}>
+            {memo.cleaned_text}
+          </p>
+
+          {memo.audio_url && <AudioPlayer url={memo.audio_url} />}
+
+          <div className="mt-4 flex items-center justify-between text-sm text-[var(--muted)]">
+            <div className="flex items-center gap-2">
+              <time>{formatTime(memo.created_at)}</time>
+              {memo.calendar_event && (
+                <CalendarMark event={memo.calendar_event} />
+              )}
+            </div>
+            {memo.intent !== "memo" && (
+              <span className="px-2 py-0.5 rounded-full bg-[var(--accent-light)] text-xs">
+                {memo.intent}
+              </span>
+            )}
+          </div>
+
+          {isDone && showDoneDot && (
+            <span className="done-dot">
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                <path
+                  d="M2 5l2 2 4-5"
+                  stroke="white"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </span>
+          )}
+        </article>
+
+        {/* 背面：与正面等高（用透明占位撑开），内容 absolute 居中 */}
+        <article className="flip-face flip-back memo-card relative cursor-pointer">
+          <p className="text-lg leading-relaxed invisible" aria-hidden>
+            {memo.cleaned_text}
+          </p>
+          {memo.audio_url && (
+            <div className="mt-3 h-12 invisible" aria-hidden />
+          )}
+          <div
+            className="mt-4 flex items-center justify-between text-sm invisible"
+            aria-hidden
+          >
+            <time>{formatTime(memo.created_at)}</time>
+          </div>
+
+          {flipped && (
+            <CardBack
+              memo={memo}
+              onCompleted={handleCompleted}
+              onClose={() => setFlipped(false)}
+            />
+          )}
+        </article>
       </div>
-    </article>
+    </div>
   );
 }
 
@@ -77,7 +193,6 @@ export function AudioPlayer({ url }: { url: string }) {
   const togglePlay = async () => {
     const audio = audioRef.current;
     if (!audio) return;
-
     if (isPlaying) {
       audio.pause();
     } else {
@@ -103,7 +218,10 @@ export function AudioPlayer({ url }: { url: string }) {
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div className="mt-3 flex items-center gap-3 px-3 py-2 rounded-lg bg-[var(--accent-light)]/50">
+    <div
+      className="mt-3 flex items-center gap-3 px-3 py-2 rounded-lg bg-[var(--accent-light)]/50"
+      data-no-flip
+    >
       <audio
         ref={audioRef}
         src={url}
@@ -113,7 +231,6 @@ export function AudioPlayer({ url }: { url: string }) {
         onEnded={() => setIsPlaying(false)}
       />
 
-      {/* Play/Pause 按钮 */}
       <button
         onClick={togglePlay}
         className="w-8 h-8 flex items-center justify-center rounded-full bg-[var(--accent)] text-white flex-shrink-0 hover:opacity-80 transition-opacity"
@@ -131,10 +248,10 @@ export function AudioPlayer({ url }: { url: string }) {
         )}
       </button>
 
-      {/* 进度条 */}
       <div
         className="flex-1 h-1.5 bg-[var(--card-border)] rounded-full cursor-pointer"
         onClick={handleProgressClick}
+        data-no-flip
       >
         <div
           className="h-full bg-[var(--accent)] rounded-full transition-[width] duration-100"
@@ -142,7 +259,6 @@ export function AudioPlayer({ url }: { url: string }) {
         />
       </div>
 
-      {/* 时长 */}
       <span className="text-xs text-[var(--muted)] flex-shrink-0 tabular-nums">
         {duration > 0
           ? `${formatDuration(currentTime)} / ${formatDuration(duration)}`
@@ -152,7 +268,7 @@ export function AudioPlayer({ url }: { url: string }) {
   );
 }
 
-function CalendarBadge({ event, synced }: { event: CalendarEvent; synced: boolean }) {
+function CalendarMark({ event }: { event: CalendarEvent }) {
   const date = new Date(event.start_time);
   const dateStr = event.all_day
     ? date.toLocaleDateString("zh-CN", { month: "long", day: "numeric" })
@@ -164,28 +280,16 @@ function CalendarBadge({ event, synced }: { event: CalendarEvent; synced: boolea
       });
 
   return (
-    <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50/60 text-sm">
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 16 16"
-        fill="none"
-        className="flex-shrink-0 text-blue-500"
-      >
+    <span
+      className="inline-flex items-center text-blue-500"
+      title={`已加入日历：${event.title} · ${dateStr}`}
+      aria-label="已加入日历"
+    >
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
         <rect x="2" y="3" width="12" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
         <path d="M2 6.5h12" stroke="currentColor" strokeWidth="1.2" />
         <path d="M5.5 1.5v3M10.5 1.5v3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
       </svg>
-      <span className="text-blue-700">{event.title}</span>
-      <span className="text-blue-400">{dateStr}</span>
-      {event.location && (
-        <span className="text-blue-400">@ {event.location}</span>
-      )}
-      {synced && (
-        <svg width="14" height="14" viewBox="0 0 14 14" className="flex-shrink-0 text-green-500 ml-auto">
-          <path d="M3 7l3 3 5-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        </svg>
-      )}
-    </div>
+    </span>
   );
 }

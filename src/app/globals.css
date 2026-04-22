@@ -90,3 +90,124 @@ body {
   color: var(--accent);
   letter-spacing: 0.05em;
 }
+
+/* ============================================================
+   卡片翻转动效
+   ============================================================ */
+.flip-scene {
+  perspective: 1200px;
+  position: relative;
+  z-index: 0;
+}
+
+.flip-card {
+  position: relative;
+  display: grid;
+  transform-style: preserve-3d;
+  transition: transform 700ms cubic-bezier(0.65, 0, 0.35, 1);
+  transform-origin: center;
+}
+
+.flip-card.is-flipped {
+  transform: rotateY(180deg);
+}
+
+.flip-card.is-flipping {
+  animation: flip-breath 700ms cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+@keyframes flip-breath {
+  0%   { transform: var(--flip-from, rotateY(0)) scale(1); }
+  50%  { transform: var(--flip-mid, rotateY(90deg)) scale(0.96); }
+  100% { transform: var(--flip-to, rotateY(180deg)) scale(1); }
+}
+
+.flip-face {
+  grid-area: 1 / 1;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.flip-back {
+  transform: rotateY(180deg);
+  background: #FDF6EC;
+}
+
+/* 新手引导：第一张卡片半翻转预览 */
+.flip-card.hint-peek {
+  animation: hint-peek 1200ms cubic-bezier(0.65, 0, 0.35, 1) 800ms 1;
+}
+@keyframes hint-peek {
+  0%   { transform: rotateY(0); }
+  40%  { transform: rotateY(-28deg); }
+  70%  { transform: rotateY(-28deg); }
+  100% { transform: rotateY(0); }
+}
+
+/* 已完成卡片的正面：浅绿底 + 浅绿边 */
+.memo-card.is-done {
+  background: #F2F8F1;
+  border-color: #8EBF84;
+}
+
+/* 右上角绿色小圆勾 */
+.done-dot {
+  position: absolute;
+  top: 0.9rem;
+  right: 0.9rem;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: #8EBF84;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  animation: done-dot-in 320ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  transform: scale(0.4);
+  opacity: 0;
+}
+@keyframes done-dot-in {
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* 完成按钮：扁平浅绿，呼吸微动 */
+.complete-btn {
+  padding: 0.6rem 1.5rem;
+  border-radius: 9999px;
+  background: #D0EAC8;
+  color: #3A7434;
+  font-size: 1rem;
+  border: none;
+  cursor: pointer;
+  animation: complete-btn-breathe 2400ms ease-in-out infinite;
+  transition: transform 150ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 6rem;
+  min-height: 2.5rem;
+}
+.complete-btn:active {
+  transform: scale(0.94);
+}
+.complete-btn.is-completing {
+  animation: none;
+  background: #8EBF84;
+  color: white;
+}
+@keyframes complete-btn-breathe {
+  0%, 100% { opacity: 0.88; transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.03); }
+}
+
+/* 画勾动画 */
+.check-stroke {
+  stroke-dasharray: 30;
+  stroke-dashoffset: 30;
+  animation: draw-check 700ms cubic-bezier(0.65, 0, 0.35, 1) 50ms forwards;
+}
+@keyframes draw-check {
+  to { stroke-dashoffset: 0; }
+}
+
