@@ -5,6 +5,7 @@
 
 import { chatCompletion } from "./llm";
 import { supabase } from "./supabase";
+import { hasMeaningfulTranscription, normalizeTranscription } from "./transcription";
 
 function buildSystemPrompt(): string {
   // 注入当前时间，让 LLM 能解析相对日期（"下周三"、"这周五"等）
@@ -15,6 +16,10 @@ function buildSystemPrompt(): string {
   return `你是一个语音备忘录的后处理助手。用户通过语音录入了一段话，经过语音转文字后得到了下面的文本。请你完成以下任务：
 
 当前时间：${currentDatetime}（${weekday}）
+
+## 绝对约束
+- 只能整理和分类用户原文中已经出现的信息，不能补充、猜测、续写或编造任何原文不存在的内容。
+- 如果原文为空、只有标点、只有空白、或没有可识别的语义内容，必须输出 cleaned_text 为空字符串、intent 为 "memo"、intent_data 为 null、calendar_event 为 null。
 
 ## 任务
 
@@ -125,10 +130,15 @@ interface EnhanceResult {
 export async function enhanceTranscription(
   rawText: string
 ): Promise<EnhanceResult> {
+  const normalizedRawText = normalizeTranscription(rawText);
+  if (!hasMeaningfulTranscription(normalizedRawText)) {
+    throw new Error("Cannot enhance empty transcription");
+  }
+
   const response = await chatCompletion(
     [
       { role: "system", content: buildSystemPrompt() },
-      { role: "user", content: rawText },
+      { role: "user", content: normalizedRawText },
     ],
     { jsonMode: true }
   );
@@ -136,8 +146,11 @@ export async function enhanceTranscription(
   const result = JSON.parse(response.content);
 
   // 校验必要字段
-  if (!result.cleaned_text || !result.intent) {
+  if (typeof result.cleaned_text !== "string" || !result.intent) {
     throw new Error("LLM response missing required fields");
+  }
+  if (!hasMeaningfulTranscription(result.cleaned_text)) {
+    throw new Error("LLM response returned empty cleaned_text");
   }
 
   // 校验 intent 值
@@ -153,7 +166,7 @@ export async function enhanceTranscription(
   }
 
   return {
-    cleaned_text: result.cleaned_text,
+    cleaned_text: normalizeTranscription(result.cleaned_text),
     intent: result.intent,
     intent_data: result.intent_data || null,
     calendar_event: calendarEvent,

@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import WebSocket from "ws";
+import { hasMeaningfulTranscription, normalizeTranscription } from "./transcription";
 
 const APPID = process.env.IFLYTEK_APPID || "";
 const API_KEY = process.env.IFLYTEK_API_KEY || "";
@@ -105,7 +106,11 @@ export async function transcribeWithIflytek(
           ws.close();
           // 按 sn 排序拼接结果
           const sortedKeys = Array.from(resultMap.keys()).sort((a, b) => a - b);
-          const finalText = sortedKeys.map((k) => resultMap.get(k)).join("");
+          const finalText = normalizeTranscription(sortedKeys.map((k) => resultMap.get(k)).join(""));
+          if (!hasMeaningfulTranscription(finalText)) {
+            reject(new Error("讯飞未识别到有效语音文本"));
+            return;
+          }
           resolve(finalText);
         }
       } catch (e) {

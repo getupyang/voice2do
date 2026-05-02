@@ -4,6 +4,7 @@ import { transcribeWithIflytek } from "@/lib/iflytek";
 import { extractRawAudio, pcmToWav } from "@/lib/audio";
 import { supabase } from "@/lib/supabase";
 import { enhanceMemo } from "@/lib/enhance";
+import { hasMeaningfulTranscription, normalizeTranscription } from "@/lib/transcription";
 
 export async function POST(request: NextRequest) {
   let memoId: string | null = null;
@@ -12,7 +13,6 @@ export async function POST(request: NextRequest) {
     // Step 1: 解析请求，获取音频数据
     const contentType = request.headers.get("content-type") || "";
     let audioBuffer: Buffer;
-    let mimeType: string;
     let fileName: string;
 
     console.log("Received request with content-type:", contentType);
@@ -59,18 +59,12 @@ export async function POST(request: NextRequest) {
 
       const arrayBuffer = await file.arrayBuffer();
       audioBuffer = Buffer.from(arrayBuffer);
-      mimeType = file.type || "audio/m4a";
       fileName = file.name || `audio_${Date.now()}.m4a`;
     } else {
       // 处理原始音频数据（直接发送二进制）
       const arrayBuffer = await request.arrayBuffer();
       audioBuffer = Buffer.from(arrayBuffer);
 
-      if (contentType.includes("audio/")) {
-        mimeType = contentType.split(";")[0].trim();
-      } else {
-        mimeType = "audio/m4a";
-      }
       fileName = `audio_${Date.now()}.m4a`;
 
       // 非表单请求时，从请求头读取设备名称（支持 URL 编码）
@@ -214,7 +208,56 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const rawText = transcribeResult.value;
+    const rawText = normalizeTranscription(transcribeResult.value);
+    if (!hasMeaningfulTranscription(rawText)) {
+      console.error("Transcription returned empty text");
+
+      await supabase
+        .from("memos")
+        .update({
+          raw_text: "[未识别到有效语音]",
+          cleaned_text: "[未识别到有效语音]",
+          status: "error",
+          audio_url: audioUrl,
+        })
+        .eq("id", memoId);
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: "未识别到有效语音文本，请重新录制",
+          memo_id: memoId,
+          audio_uploaded: !!audioUrl,
+        },
+        { status: 422 }
+      );
+    }
+
+    if (!audioUrl) {
+      const reason = uploadResult.status === "rejected"
+        ? uploadResult.reason?.message || String(uploadResult.reason)
+        : uploadResult.value.error?.message || "未知错误";
+      console.error("Audio upload failed after successful transcription:", reason);
+
+      await supabase
+        .from("memos")
+        .update({
+          raw_text: rawText,
+          cleaned_text: rawText,
+          status: "error",
+        })
+        .eq("id", memoId);
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: "语音文件上传失败，已保存转写文本但不会标记为有效记录: " + reason,
+          memo_id: memoId,
+        },
+        { status: 502 }
+      );
+    }
+
     const cleanedText = rawText;
     console.log("Transcription result:", rawText.substring(0, 50));
 
