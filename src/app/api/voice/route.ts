@@ -164,86 +164,19 @@ export async function POST(request: NextRequest) {
     }
     console.log(`Resampled PCM: ${pcm16k.length} bytes, duration=${(pcm16k.length / 2 / 16000).toFixed(1)}s`);
 
-    // 并行：上传 WAV + 讯飞转写
-    const [uploadResult, transcribeResult] = await Promise.allSettled([
-      supabase.storage.from("audio").upload(wavFileName, wavBuffer, {
-        contentType: "audio/wav",
-        upsert: false,
-      }),
-      transcribeWithIflytek(pcm16k),
-    ]);
+    // 先保证音频保存成功，再尽快响应手机端；转写在后台继续。
+    const uploadResult = await supabase.storage.from("audio").upload(wavFileName, wavBuffer, {
+      contentType: "audio/wav",
+      upsert: false,
+    });
 
-    // 处理上传结果
-    let audioUrl: string | null = null;
-    if (uploadResult.status === "fulfilled" && !uploadResult.value.error) {
-      const { data: urlData } = supabase.storage.from("audio").getPublicUrl(wavFileName);
-      audioUrl = urlData.publicUrl;
-      console.log("WAV uploaded to:", audioUrl);
-    } else {
-      const reason = uploadResult.status === "rejected"
-        ? uploadResult.reason
-        : uploadResult.value.error?.message;
-      console.warn("Storage upload failed:", reason);
-    }
-
-    // 处理转写结果
-    if (transcribeResult.status === "rejected") {
-      console.error("Transcription failed:", transcribeResult.reason);
-
+    if (uploadResult.error) {
+      console.error("Storage upload failed:", uploadResult.error.message);
       await supabase
         .from("memos")
         .update({
-          raw_text: "[转写失败]",
-          cleaned_text: "[转写失败]",
-          status: "error",
-          audio_url: audioUrl,
-        })
-        .eq("id", memoId);
-
-      return NextResponse.json({
-        success: false,
-        error: "语音转写失败: " + (transcribeResult.reason?.message || "未知错误"),
-        memo_id: memoId,
-        audio_uploaded: !!audioUrl,
-      });
-    }
-
-    const rawText = normalizeTranscription(transcribeResult.value);
-    if (!hasMeaningfulTranscription(rawText)) {
-      console.error("Transcription returned empty text");
-
-      await supabase
-        .from("memos")
-        .update({
-          raw_text: "[未识别到有效语音]",
-          cleaned_text: "[未识别到有效语音]",
-          status: "error",
-          audio_url: audioUrl,
-        })
-        .eq("id", memoId);
-
-      return NextResponse.json(
-        {
-          success: false,
-          error: "未识别到有效语音文本，请重新录制",
-          memo_id: memoId,
-          audio_uploaded: !!audioUrl,
-        },
-        { status: 422 }
-      );
-    }
-
-    if (!audioUrl) {
-      const reason = uploadResult.status === "rejected"
-        ? uploadResult.reason?.message || String(uploadResult.reason)
-        : uploadResult.value.error?.message || "未知错误";
-      console.error("Audio upload failed after successful transcription:", reason);
-
-      await supabase
-        .from("memos")
-        .update({
-          raw_text: rawText,
-          cleaned_text: rawText,
+          raw_text: "[音频上传失败]",
+          cleaned_text: "[音频上传失败]",
           status: "error",
         })
         .eq("id", memoId);
@@ -251,28 +184,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: "语音文件上传失败，已保存转写文本但不会标记为有效记录: " + reason,
+          error: "语音文件上传失败: " + uploadResult.error.message,
           memo_id: memoId,
         },
         { status: 502 }
       );
     }
 
-    const cleanedText = rawText;
-    console.log("Transcription result:", rawText.substring(0, 50));
+    const { data: urlData } = supabase.storage.from("audio").getPublicUrl(wavFileName);
+    const audioUrl = urlData.publicUrl;
+    console.log("WAV uploaded to:", audioUrl);
 
-    // Step 5: 更新数据库记录
-    const { data: updatedMemo, error: updateError } = await supabase
+    const { error: updateError } = await supabase
       .from("memos")
       .update({
-        raw_text: rawText,
-        cleaned_text: cleanedText,
-        status: "active",
         audio_url: audioUrl,
       })
-      .eq("id", memoId)
-      .select()
-      .single();
+      .eq("id", memoId);
 
     if (updateError) {
       console.error("Database update error:", updateError);
@@ -282,21 +210,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 异步调用 LLM 增强（不阻塞响应）
-    if (process.env.OPENROUTER_API_KEY) {
-      after(async () => {
-        await enhanceMemo(memoId!, rawText);
-      });
-    }
+    after(async () => {
+      await transcribeMemoInBackground(memoId!, pcm16k, audioUrl);
+    });
 
     return NextResponse.json({
       success: true,
+      message: "录音已保存，正在后台转写",
       data: {
-        id: updatedMemo.id,
-        raw_text: updatedMemo.raw_text,
-        cleaned_text: updatedMemo.cleaned_text,
+        id: memoId,
+        raw_text: memoData.raw_text,
+        cleaned_text: memoData.cleaned_text,
         audio_url: audioUrl,
-        created_at: updatedMemo.created_at,
+        created_at: memoData.created_at,
+        status: "pending",
       },
     });
   } catch (error) {
@@ -318,5 +245,59 @@ export async function POST(request: NextRequest) {
       },
       { status: 500 }
     );
+  }
+}
+
+async function transcribeMemoInBackground(
+  memoId: string,
+  pcm16k: Buffer,
+  audioUrl: string
+): Promise<void> {
+  try {
+    const rawText = normalizeTranscription(await transcribeWithIflytek(pcm16k));
+    if (!hasMeaningfulTranscription(rawText)) {
+      console.error("Transcription returned empty text");
+      await supabase
+        .from("memos")
+        .update({
+          raw_text: "[未识别到有效语音]",
+          cleaned_text: "[未识别到有效语音]",
+          status: "error",
+          audio_url: audioUrl,
+        })
+        .eq("id", memoId);
+      return;
+    }
+
+    console.log("Transcription result:", rawText.substring(0, 50));
+    const { error: updateError } = await supabase
+      .from("memos")
+      .update({
+        raw_text: rawText,
+        cleaned_text: rawText,
+        status: "active",
+        audio_url: audioUrl,
+      })
+      .eq("id", memoId);
+
+    if (updateError) {
+      console.error("Database update error:", updateError);
+      return;
+    }
+
+    if (process.env.OPENROUTER_API_KEY) {
+      await enhanceMemo(memoId, rawText);
+    }
+  } catch (error) {
+    console.error("Transcription failed:", error);
+    await supabase
+      .from("memos")
+      .update({
+        raw_text: "[转写失败]",
+        cleaned_text: "[转写失败]",
+        status: "error",
+        audio_url: audioUrl,
+      })
+      .eq("id", memoId);
   }
 }
