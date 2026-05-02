@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
+import { transcribeWithIflytek } from "@/lib/iflytek";
 import { extractRawAudio, pcmToWav } from "@/lib/audio";
 import { supabase } from "@/lib/supabase";
-import { toPcm16kMono, transcribeMemoInBackground } from "@/lib/voicePipeline";
+import { enhanceMemo } from "@/lib/enhance";
+import { hasMeaningfulTranscription, normalizeTranscription } from "@/lib/transcription";
 
 export async function POST(request: NextRequest) {
   let memoId: string | null = null;
@@ -128,22 +130,120 @@ export async function POST(request: NextRequest) {
     const wavBuffer = pcmToWav(rawAudio);
     const wavFileName = `uploads/${Date.now()}_${fileName.replace(/\.\w+$/, "")}.wav`;
 
-    const pcm16k = toPcm16kMono(rawAudio);
+    // 从已提取的原始 PCM 重采样到 16kHz mono（复用 rawAudio，不重新解析 AIFF）
+    let pcm16k = rawAudio.pcm;
+    if (rawAudio.channels > 1) {
+      // 立体声转单声道
+      const frameSize = rawAudio.channels * 2;
+      const frameCount = Math.floor(pcm16k.length / frameSize);
+      const mono = Buffer.alloc(frameCount * 2);
+      for (let i = 0; i < frameCount; i++) {
+        let sum = 0;
+        for (let ch = 0; ch < rawAudio.channels; ch++) {
+          sum += pcm16k.readInt16LE(i * frameSize + ch * 2);
+        }
+        mono.writeInt16LE(Math.round(sum / rawAudio.channels), i * 2);
+      }
+      pcm16k = mono;
+    }
+    if (rawAudio.sampleRate !== 16000) {
+      // 重采样到 16kHz
+      const srcSamples = pcm16k.length / 2;
+      const dstSamples = Math.round(srcSamples * 16000 / rawAudio.sampleRate);
+      const dst = Buffer.alloc(dstSamples * 2);
+      const ratio = rawAudio.sampleRate / 16000;
+      for (let i = 0; i < dstSamples; i++) {
+        const srcPos = i * ratio;
+        const srcIdx = Math.floor(srcPos);
+        const frac = srcPos - srcIdx;
+        const s0 = srcIdx < srcSamples ? pcm16k.readInt16LE(srcIdx * 2) : 0;
+        const s1 = srcIdx + 1 < srcSamples ? pcm16k.readInt16LE((srcIdx + 1) * 2) : s0;
+        dst.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(s0 + (s1 - s0) * frac))), i * 2);
+      }
+      pcm16k = dst;
+    }
     console.log(`Resampled PCM: ${pcm16k.length} bytes, duration=${(pcm16k.length / 2 / 16000).toFixed(1)}s`);
 
-    // 先保证音频保存成功，再尽快响应手机端；转写在后台继续。
-    const uploadResult = await supabase.storage.from("audio").upload(wavFileName, wavBuffer, {
-      contentType: "audio/wav",
-      upsert: false,
-    });
+    // 并行：上传 WAV + 讯飞转写
+    const [uploadResult, transcribeResult] = await Promise.allSettled([
+      supabase.storage.from("audio").upload(wavFileName, wavBuffer, {
+        contentType: "audio/wav",
+        upsert: false,
+      }),
+      transcribeWithIflytek(pcm16k),
+    ]);
 
-    if (uploadResult.error) {
-      console.error("Storage upload failed:", uploadResult.error.message);
+    // 处理上传结果
+    let audioUrl: string | null = null;
+    if (uploadResult.status === "fulfilled" && !uploadResult.value.error) {
+      const { data: urlData } = supabase.storage.from("audio").getPublicUrl(wavFileName);
+      audioUrl = urlData.publicUrl;
+      console.log("WAV uploaded to:", audioUrl);
+    } else {
+      const reason = uploadResult.status === "rejected"
+        ? uploadResult.reason
+        : uploadResult.value.error?.message;
+      console.warn("Storage upload failed:", reason);
+    }
+
+    // 处理转写结果
+    if (transcribeResult.status === "rejected") {
+      console.error("Transcription failed:", transcribeResult.reason);
+
       await supabase
         .from("memos")
         .update({
-          raw_text: "[音频上传失败]",
-          cleaned_text: "[音频上传失败]",
+          raw_text: "[转写失败]",
+          cleaned_text: "[转写失败]",
+          status: "error",
+          audio_url: audioUrl,
+        })
+        .eq("id", memoId);
+
+      return NextResponse.json({
+        success: false,
+        error: "语音转写失败: " + (transcribeResult.reason?.message || "未知错误"),
+        memo_id: memoId,
+        audio_uploaded: !!audioUrl,
+      });
+    }
+
+    const rawText = normalizeTranscription(transcribeResult.value);
+    if (!hasMeaningfulTranscription(rawText)) {
+      console.error("Transcription returned empty text");
+
+      await supabase
+        .from("memos")
+        .update({
+          raw_text: "[未识别到有效语音]",
+          cleaned_text: "[未识别到有效语音]",
+          status: "error",
+          audio_url: audioUrl,
+        })
+        .eq("id", memoId);
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: "未识别到有效语音文本，请重新录制",
+          memo_id: memoId,
+          audio_uploaded: !!audioUrl,
+        },
+        { status: 422 }
+      );
+    }
+
+    if (!audioUrl) {
+      const reason = uploadResult.status === "rejected"
+        ? uploadResult.reason?.message || String(uploadResult.reason)
+        : uploadResult.value.error?.message || "未知错误";
+      console.error("Audio upload failed after successful transcription:", reason);
+
+      await supabase
+        .from("memos")
+        .update({
+          raw_text: rawText,
+          cleaned_text: rawText,
           status: "error",
         })
         .eq("id", memoId);
@@ -151,23 +251,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: "语音文件上传失败: " + uploadResult.error.message,
+          error: "语音文件上传失败，已保存转写文本但不会标记为有效记录: " + reason,
           memo_id: memoId,
         },
         { status: 502 }
       );
     }
 
-    const { data: urlData } = supabase.storage.from("audio").getPublicUrl(wavFileName);
-    const audioUrl = urlData.publicUrl;
-    console.log("WAV uploaded to:", audioUrl);
+    const cleanedText = rawText;
+    console.log("Transcription result:", rawText.substring(0, 50));
 
-    const { error: updateError } = await supabase
+    // Step 5: 更新数据库记录
+    const { data: updatedMemo, error: updateError } = await supabase
       .from("memos")
       .update({
+        raw_text: rawText,
+        cleaned_text: cleanedText,
+        status: "active",
         audio_url: audioUrl,
       })
-      .eq("id", memoId);
+      .eq("id", memoId)
+      .select()
+      .single();
 
     if (updateError) {
       console.error("Database update error:", updateError);
@@ -177,20 +282,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    after(async () => {
-      await transcribeMemoInBackground(memoId!, pcm16k, audioUrl);
-    });
+    // 异步调用 LLM 增强（不阻塞响应）
+    if (process.env.OPENROUTER_API_KEY) {
+      after(async () => {
+        await enhanceMemo(memoId!, rawText);
+      });
+    }
 
     return NextResponse.json({
       success: true,
-      message: "录音已保存，正在后台转写",
       data: {
-        id: memoId,
-        raw_text: memoData.raw_text,
-        cleaned_text: memoData.cleaned_text,
+        id: updatedMemo.id,
+        raw_text: updatedMemo.raw_text,
+        cleaned_text: updatedMemo.cleaned_text,
         audio_url: audioUrl,
-        created_at: memoData.created_at,
-        status: "pending",
+        created_at: updatedMemo.created_at,
       },
     });
   } catch (error) {
