@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
-import { transcribeWithIflytek } from "@/lib/iflytek";
 import { extractRawAudio, pcmToWav } from "@/lib/audio";
 import { supabase } from "@/lib/supabase";
-import { enhanceMemo } from "@/lib/enhance";
-import { hasMeaningfulTranscription, normalizeTranscription } from "@/lib/transcription";
+import { toPcm16kMono, transcribeMemoInBackground } from "@/lib/voicePipeline";
 
 export async function POST(request: NextRequest) {
   let memoId: string | null = null;
@@ -130,38 +128,7 @@ export async function POST(request: NextRequest) {
     const wavBuffer = pcmToWav(rawAudio);
     const wavFileName = `uploads/${Date.now()}_${fileName.replace(/\.\w+$/, "")}.wav`;
 
-    // 从已提取的原始 PCM 重采样到 16kHz mono（复用 rawAudio，不重新解析 AIFF）
-    let pcm16k = rawAudio.pcm;
-    if (rawAudio.channels > 1) {
-      // 立体声转单声道
-      const frameSize = rawAudio.channels * 2;
-      const frameCount = Math.floor(pcm16k.length / frameSize);
-      const mono = Buffer.alloc(frameCount * 2);
-      for (let i = 0; i < frameCount; i++) {
-        let sum = 0;
-        for (let ch = 0; ch < rawAudio.channels; ch++) {
-          sum += pcm16k.readInt16LE(i * frameSize + ch * 2);
-        }
-        mono.writeInt16LE(Math.round(sum / rawAudio.channels), i * 2);
-      }
-      pcm16k = mono;
-    }
-    if (rawAudio.sampleRate !== 16000) {
-      // 重采样到 16kHz
-      const srcSamples = pcm16k.length / 2;
-      const dstSamples = Math.round(srcSamples * 16000 / rawAudio.sampleRate);
-      const dst = Buffer.alloc(dstSamples * 2);
-      const ratio = rawAudio.sampleRate / 16000;
-      for (let i = 0; i < dstSamples; i++) {
-        const srcPos = i * ratio;
-        const srcIdx = Math.floor(srcPos);
-        const frac = srcPos - srcIdx;
-        const s0 = srcIdx < srcSamples ? pcm16k.readInt16LE(srcIdx * 2) : 0;
-        const s1 = srcIdx + 1 < srcSamples ? pcm16k.readInt16LE((srcIdx + 1) * 2) : s0;
-        dst.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(s0 + (s1 - s0) * frac))), i * 2);
-      }
-      pcm16k = dst;
-    }
+    const pcm16k = toPcm16kMono(rawAudio);
     console.log(`Resampled PCM: ${pcm16k.length} bytes, duration=${(pcm16k.length / 2 / 16000).toFixed(1)}s`);
 
     // 先保证音频保存成功，再尽快响应手机端；转写在后台继续。
@@ -245,59 +212,5 @@ export async function POST(request: NextRequest) {
       },
       { status: 500 }
     );
-  }
-}
-
-async function transcribeMemoInBackground(
-  memoId: string,
-  pcm16k: Buffer,
-  audioUrl: string
-): Promise<void> {
-  try {
-    const rawText = normalizeTranscription(await transcribeWithIflytek(pcm16k));
-    if (!hasMeaningfulTranscription(rawText)) {
-      console.error("Transcription returned empty text");
-      await supabase
-        .from("memos")
-        .update({
-          raw_text: "[未识别到有效语音]",
-          cleaned_text: "[未识别到有效语音]",
-          status: "error",
-          audio_url: audioUrl,
-        })
-        .eq("id", memoId);
-      return;
-    }
-
-    console.log("Transcription result:", rawText.substring(0, 50));
-    const { error: updateError } = await supabase
-      .from("memos")
-      .update({
-        raw_text: rawText,
-        cleaned_text: rawText,
-        status: "active",
-        audio_url: audioUrl,
-      })
-      .eq("id", memoId);
-
-    if (updateError) {
-      console.error("Database update error:", updateError);
-      return;
-    }
-
-    if (process.env.OPENROUTER_API_KEY) {
-      await enhanceMemo(memoId, rawText);
-    }
-  } catch (error) {
-    console.error("Transcription failed:", error);
-    await supabase
-      .from("memos")
-      .update({
-        raw_text: "[转写失败]",
-        cleaned_text: "[转写失败]",
-        status: "error",
-        audio_url: audioUrl,
-      })
-      .eq("id", memoId);
   }
 }

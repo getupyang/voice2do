@@ -1,73 +1,135 @@
 # iOS 捷径配置文档
 
-## 当前捷径 (v0.2)
+## 当前推荐捷径 (v0.3)
 
 捷径名称：**voice2do**
 
-### 步骤
+目标：不要再把音频文件直接 POST 到 Vercel。新版流程先向 Vercel 申请 Supabase 上传地址，再把音频直传 Supabase，最后用一个小 JSON 请求触发后台转写。
+
+### 步骤总览
 
 | # | 动作 | 设置 |
 |---|------|------|
-| 1 | 录音 | **结束录制**: 在 60 秒后 |
-| 2 | 编码录制的音频 | 仅音频: 开, 格式: **AIFF** |
-| 3 | 获取 URL 内容 | 见下方详细配置 |
-| 4 | 获取词典值 | 从 URL 结果中获取 `success` 的值 |
-| 5 | 如果 success = true | 显示通知："✓ 已记录" |
-| 6 | 否则 | 显示通知："✗ 录音保存失败，请重试" |
+| 1 | 录音 | 结束录制：在 35 秒后 |
+| 2 | 编码录制的音频 | 仅音频：开，格式：AIFF |
+| 3 | 获取 URL 内容 | `POST /api/voice/init`，请求体 JSON |
+| 4 | 获取词典值 | 从 init 结果中取 `data.signed_url` |
+| 5 | 获取词典值 | 从 init 结果中取 `data.memo_id` |
+| 6 | 获取词典值 | 从 init 结果中取 `data.path` |
+| 7 | 获取 URL 内容 | `PUT signed_url`，请求体为编码后的媒体文件 |
+| 8 | 获取 URL 内容 | `POST /api/voice/process`，请求体 JSON |
+| 9 | 获取词典值 | 从 process 结果中取 `success` |
+| 10 | 如果 success = true | 显示通知：`✓ 已保存，正在转写` |
+| 11 | 否则 | 显示通知：`✗ 上传失败，请重试` |
 
-### 修改指南（从 v0.1 升级）
+## 详细配置
 
-#### 1. 设置 60 秒录音上限
+### 1. 录音
 
-打开「voice2do」捷径 → 点击「录制音频」动作：
-- 展开「更多选项」（点击 ▶ 箭头）
-- 找到 **「结束录制」** → 选择 **「在时长之后」**
-- 设置为 **60 秒**
-- 这样录音会在 60 秒时自动停止，跟微信语音一样
+- **结束录制**：在时长之后
+- **时长**：35 秒
 
-> 💡 iOS 捷径的录音动作到时间后自动停止，用户也可以随时手动提前停止。
-> 不需要额外的倒计时提示 —— iPhone 录音时顶部状态栏会显示红色录音指示器和已录时长。
+35 秒是当前 AIFF 格式下比较稳的上限。更长录音需要先完成本地缓存队列。
 
-#### 2. 更新 API 地址
+### 2. 编码录制的音频
 
-将「获取 URL 内容」的 URL 从旧地址改为：
+- **仅音频**：开
+- **格式**：AIFF
 
+### 3. 初始化上传
+
+动作：**获取 URL 内容**
+
+- **URL**：
+
+```text
+https://voice2do.vercel.app/api/voice/init
 ```
-https://voice2do-git-feature-audio-playback-getups-projects-3677776c.vercel.app/api/voice
+
+- **方法**：POST
+- **头部**：
+  - `Content-Type`: `application/json`
+- **请求体**：JSON
+- **JSON 字段**：
+  - `device_name`: `Getup` 或 `Nono`
+  - `file_ext`: `aiff`
+
+响应示例：
+
+```json
+{
+  "success": true,
+  "data": {
+    "memo_id": "uuid",
+    "path": "incoming/xxx.aiff",
+    "signed_url": "https://...supabase.co/storage/v1/object/upload/sign/..."
+  }
+}
 ```
 
-> 后续会切换到正式 production 域名。
+### 4. 从 init 响应取值
 
-#### 3. 添加结果反馈（可选但推荐）
+用「获取词典值」动作取：
 
-在「获取 URL 内容」之后，添加以下动作：
+- `data` → `signed_url`
+- `data` → `memo_id`
+- `data` → `path`
 
-1. **获取词典值** — 键: `success`，词典: 「获取 URL 内容」的结果
-2. **如果** — 条件: 「词典值」等于 `1`（true）
-   - **显示通知** — 标题: `Voice2Do`，正文: `✓ 已记录`
-3. **否则**
-   - **显示通知** — 标题: `Voice2Do`，正文: `✗ 录音保存失败，请重试`
-4. **结束如果**
+如果捷径不方便一次取嵌套字段，可以先取 `data`，再从 `data` 里分别取 `signed_url`、`memo_id`、`path`。
 
-### "获取 URL 内容"详细配置
+### 5. 直传音频到 Supabase
 
-- **URL**: 见上方地址
-- **方法**: POST
-- **头部**:
-  - `device_name`: `Getup`（用于标识设备/用户，Nono 的手机改为 `Nono`）
-- **请求体**: 文件
-  - **文件**: 编码后的媒体（步骤 2 的输出）
+动作：**获取 URL 内容**
 
-### 音频处理说明
+- **URL**：第 4 步拿到的 `signed_url`
+- **方法**：PUT
+- **头部**：
+  - `Content-Type`: `audio/aiff`
+- **请求体**：文件
+- **文件**：第 2 步的「编码后的媒体」
 
-iOS 捷径编码出的 AIFF 格式会在后端被自动转为 WAV 格式存储（浏览器兼容）：
-1. 提取 SSND chunk 获取 PCM 数据
-2. 大端转小端（讯飞要求小端 16bit PCM）
-3. 包装为标准 WAV（16kHz, 16bit, mono）上传到 Supabase Storage
-4. WAV 用于网页端播放，PCM 用于讯飞转写
+这个请求不经过 Vercel，不会触发 Vercel 的 4.5MB body 限制。
 
-### 录音时长限制说明
+### 6. 触发后台处理
 
-- **60 秒上限**：Vercel Hobby 函数超时为 60 秒，更长的录音无法处理完
-- 60 秒 16kHz mono PCM ≈ 1.9MB WAV，上传和存储开销可接受
-- 用户可以随时提前停止录音（短录音更常见）
+动作：**获取 URL 内容**
+
+- **URL**：
+
+```text
+https://voice2do.vercel.app/api/voice/process
+```
+
+- **方法**：POST
+- **头部**：
+  - `Content-Type`: `application/json`
+- **请求体**：JSON
+- **JSON 字段**：
+  - `memo_id`: 第 4 步拿到的 `memo_id`
+  - `path`: 第 4 步拿到的 `path`
+
+成功响应示例：
+
+```json
+{
+  "success": true,
+  "message": "录音已上传，正在后台转写",
+  "data": {
+    "memo_id": "uuid",
+    "status": "pending"
+  }
+}
+```
+
+网页会先显示「转写中」，后台完成后变成正式文本；如果讯飞失败，仍会保留错误记录。
+
+## 已废弃配置
+
+不要再使用下面这种配置作为主路径：
+
+```text
+POST https://voice2do.vercel.app/api/voice
+请求体：文件
+```
+
+这个旧接口仍保留兼容，但它会让大音频经过 Vercel request body，容易在 iOS 捷径里卡在上传进度中间，且受 Vercel 4.5MB 限制影响。

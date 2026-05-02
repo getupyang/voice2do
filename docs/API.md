@@ -9,7 +9,82 @@
 
 ## 接口列表
 
-### 1. 上传语音
+### 1. 上传语音（推荐：直传 Supabase）
+
+iOS 捷径应使用三步直传流程，避免大音频文件经过 Vercel。
+
+#### 1.1 初始化上传
+
+**请求**
+
+```
+POST /api/voice/init
+Content-Type: application/json
+```
+
+```json
+{
+  "device_name": "Getup",
+  "file_ext": "aiff"
+}
+```
+
+**响应**
+
+```json
+{
+  "success": true,
+  "data": {
+    "memo_id": "550e8400-e29b-41d4-a716-446655440000",
+    "path": "incoming/1777730000000_550e8400-e29b-41d4-a716-446655440000.aiff",
+    "signed_url": "https://...supabase.co/storage/v1/object/upload/sign/...",
+    "token": "..."
+  }
+}
+```
+
+#### 1.2 上传音频到 signed_url
+
+**请求**
+
+```
+PUT <signed_url>
+Content-Type: audio/aiff
+Body: AIFF 音频文件二进制
+```
+
+#### 1.3 触发后台处理
+
+**请求**
+
+```
+POST /api/voice/process
+Content-Type: application/json
+```
+
+```json
+{
+  "memo_id": "550e8400-e29b-41d4-a716-446655440000",
+  "path": "incoming/1777730000000_550e8400-e29b-41d4-a716-446655440000.aiff"
+}
+```
+
+**响应**
+
+```json
+{
+  "success": true,
+  "message": "录音已上传，正在后台转写",
+  "data": {
+    "memo_id": "550e8400-e29b-41d4-a716-446655440000",
+    "status": "pending"
+  }
+}
+```
+
+---
+
+### 1b. 上传语音（兼容旧捷径）
 
 上传语音文件，自动转写为文字并保存。
 
@@ -17,9 +92,11 @@
 
 ```
 POST /api/voice
-Content-Type: audio/m4a 或 audio/mpeg 或 audio/wav
+Content-Type: audio/aiff 或 audio/wav
 Body: 音频文件二进制数据
 ```
+
+这个旧接口会让音频文件经过 Vercel request body，仍保留兼容，但不建议 iOS 捷径继续使用。
 
 **响应**
 
@@ -49,10 +126,7 @@ Body: 音频文件二进制数据
 
 1. 添加「录制音频」操作
 2. 添加「获取 URL 内容」操作
-   - URL: `https://你的域名/api/voice`
-   - 方法: POST
-   - 请求体: 文件
-   - 文件: 录制的音频
+   - 推荐按 `docs/IOS_SHORTCUT.md` 配置 `/api/voice/init` + Supabase signed upload + `/api/voice/process`
 
 ---
 
