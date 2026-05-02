@@ -189,16 +189,24 @@ export function AudioPlayer({ url }: { url: string }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
 
   const togglePlay = async () => {
     const audio = audioRef.current;
     if (!audio) return;
+    setPlaybackError(null);
     if (isPlaying) {
       audio.pause();
+      setIsPlaying(false);
     } else {
-      await audio.play();
+      try {
+        await audio.play();
+        setIsPlaying(true);
+      } catch (error) {
+        setIsPlaying(false);
+        setPlaybackError(error instanceof Error ? error.message : "音频播放失败");
+      }
     }
-    setIsPlaying(!isPlaying);
   };
 
   const formatDuration = (seconds: number) => {
@@ -218,52 +226,69 @@ export function AudioPlayer({ url }: { url: string }) {
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div
-      className="mt-3 flex items-center gap-3 px-3 py-2 rounded-lg bg-[var(--accent-light)]/50"
-      data-no-flip
-    >
-      <audio
-        ref={audioRef}
-        src={url}
-        preload="metadata"
-        onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
-        onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime || 0)}
-        onEnded={() => setIsPlaying(false)}
-      />
-
-      <button
-        onClick={togglePlay}
-        className="w-8 h-8 flex items-center justify-center rounded-full bg-[var(--accent)] text-white flex-shrink-0 hover:opacity-80 transition-opacity"
-        aria-label={isPlaying ? "暂停" : "播放"}
-      >
-        {isPlaying ? (
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-            <rect x="2" y="1" width="3" height="10" rx="0.5" />
-            <rect x="7" y="1" width="3" height="10" rx="0.5" />
-          </svg>
-        ) : (
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-            <path d="M3 1.5v9l7.5-4.5L3 1.5z" />
-          </svg>
-        )}
-      </button>
-
-      <div
-        className="flex-1 h-1.5 bg-[var(--card-border)] rounded-full cursor-pointer"
-        onClick={handleProgressClick}
-        data-no-flip
-      >
-        <div
-          className="h-full bg-[var(--accent)] rounded-full transition-[width] duration-100"
-          style={{ width: `${progress}%` }}
+    <div className="mt-3 rounded-lg bg-[var(--accent-light)]/50" data-no-flip>
+      <div className="flex items-center gap-3 px-3 py-2">
+        <audio
+          ref={audioRef}
+          src={url}
+          preload="metadata"
+          onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
+          onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime || 0)}
+          onEnded={() => setIsPlaying(false)}
+          onError={() => {
+            setIsPlaying(false);
+            setPlaybackError("音频加载失败");
+          }}
         />
+
+        <button
+          onClick={togglePlay}
+          className="w-8 h-8 flex items-center justify-center rounded-full bg-[var(--accent)] text-white flex-shrink-0 hover:opacity-80 transition-opacity"
+          aria-label={isPlaying ? "暂停" : "播放"}
+        >
+          {isPlaying ? (
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+              <rect x="2" y="1" width="3" height="10" rx="0.5" />
+              <rect x="7" y="1" width="3" height="10" rx="0.5" />
+            </svg>
+          ) : (
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+              <path d="M3 1.5v9l7.5-4.5L3 1.5z" />
+            </svg>
+          )}
+        </button>
+
+        <div
+          className="flex-1 h-1.5 bg-[var(--card-border)] rounded-full cursor-pointer"
+          onClick={handleProgressClick}
+          data-no-flip
+        >
+          <div
+            className="h-full bg-[var(--accent)] rounded-full transition-[width] duration-100"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+
+        <span className="text-xs text-[var(--muted)] flex-shrink-0 tabular-nums">
+          {duration > 0
+            ? `${formatDuration(currentTime)} / ${formatDuration(duration)}`
+            : "--:--"}
+        </span>
       </div>
 
-      <span className="text-xs text-[var(--muted)] flex-shrink-0 tabular-nums">
-        {duration > 0
-          ? `${formatDuration(currentTime)} / ${formatDuration(duration)}`
-          : "--:--"}
-      </span>
+      {playbackError && (
+        <div className="px-3 pb-2 text-xs text-red-500">
+          {playbackError}，
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="underline underline-offset-2"
+          >
+            打开录音
+          </a>
+        </div>
+      )}
     </div>
   );
 }

@@ -13,6 +13,19 @@ const BASE_URL = `wss://${HOST}${PATH}`;
 // 每帧发送的音频大小（字节）
 const FRAME_SIZE = 1280;
 
+function describeIflytekError(code: number, message: string | undefined): string {
+  if (code === 11201) {
+    return "讯飞语音识别额度不足或日流控超限，请检查讯飞控制台余额、套餐额度和应用服务授权";
+  }
+  if (code === 11200 || code === 10005) {
+    return "讯飞应用未授权或授权已到期，请检查 APPID 是否开通当前语音识别服务";
+  }
+  if (code === 11202 || code === 11203) {
+    return "讯飞语音识别请求过于频繁，请稍后重试";
+  }
+  return `讯飞 API 错误: code=${code}, message=${message || "未知错误"}`;
+}
+
 /**
  * 生成讯飞鉴权 URL
  */
@@ -78,7 +91,7 @@ export async function transcribeWithIflytek(
         if (code !== 0) {
           clearTimeout(timeout);
           ws.close();
-          reject(new Error(`讯飞 API 错误: code=${code}, message=${response.header?.message}`));
+          reject(new Error(describeIflytekError(code, response.header?.message)));
           return;
         }
 
