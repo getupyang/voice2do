@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import WebSocket from "ws";
 import { hasMeaningfulTranscription, normalizeTranscription } from "./transcription";
+import { getIflytekTimeoutMs } from "./iflytekTiming";
 
 const APPID = process.env.IFLYTEK_APPID || "";
 const API_KEY = process.env.IFLYTEK_API_KEY || "";
@@ -72,10 +73,11 @@ export async function transcribeWithIflytek(
   return new Promise((resolve, reject) => {
     const url = buildAuthUrl();
     const ws = new WebSocket(url);
+    const timeoutMs = getIflytekTimeoutMs(pcmBuffer.length);
     const timeout = setTimeout(() => {
       ws.close();
       reject(new Error("讯飞转写超时"));
-    }, 60000);
+    }, timeoutMs);
 
     // 用于动态修正的结果存储
     const resultMap = new Map<number, string>();
