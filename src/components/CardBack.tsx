@@ -15,13 +15,6 @@ export function CardBack({ memo, onCompleted, onClose }: Props) {
   const [completing, setCompleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 点背面任何地方都返回（除非点在按钮上）
-  function handleBackgroundClick(e: React.MouseEvent) {
-    const interactive = (e.target as HTMLElement).closest("button, a");
-    if (interactive) return;
-    onClose();
-  }
-
   async function handleComplete() {
     if (submitting || completing) return;
     setError(null);
@@ -70,10 +63,32 @@ export function CardBack({ memo, onCompleted, onClose }: Props) {
   }
 
   return (
-    <div
-      className="absolute inset-0 flex items-center justify-center"
-      onClick={handleBackgroundClick}
-    >
+    <div className="absolute inset-0 flex items-center justify-center">
+      <button
+        type="button"
+        onClick={onClose}
+        className="flip-back-btn"
+        aria-label="翻回正面"
+        title="翻回正面"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M9 7H5V3"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M5 7a8 8 0 1 1 .7 9.2"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+
       {isDone ? (
         <button
           onClick={handleUncomplete}
