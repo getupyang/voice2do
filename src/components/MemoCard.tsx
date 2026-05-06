@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Memo, CalendarEvent } from "@/types";
 import { formatTime } from "@/lib/utils";
 import { CardBack } from "./CardBack";
+import { isUnfinishedVoiceUpload } from "@/lib/pendingUpload";
 
 const HINT_SEEN_KEY = "voice2do.flipHintSeen";
 
@@ -149,6 +150,22 @@ export function MemoCard({
 }
 
 function PendingCard({ memo }: { memo: Memo }) {
+  if (isUnfinishedVoiceUpload(memo)) {
+    return (
+      <article className="memo-card border-red-200 bg-red-50/30">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-red-400 text-sm">上传未完成</span>
+        </div>
+        <p className="text-sm text-[var(--muted)]">
+          没有收到音频文件，无法继续转写。
+        </p>
+        <div className="mt-4 text-sm text-[var(--muted)]">
+          <time>{formatTime(memo.created_at)}</time>
+        </div>
+      </article>
+    );
+  }
+
   return (
     <article className="memo-card opacity-60">
       <div className="flex items-center gap-2">
